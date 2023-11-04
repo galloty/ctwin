@@ -10,9 +10,15 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <cmath>
 #include <vector>
 #include <chrono>
 #include <sys/stat.h>
+#if defined(_WIN32)
+#include <Windows.h>
+#else
+#include <signal.h>
+#endif
 
 // Peter L. Montgomery, Modular multiplication without trial division, Math. Comp.44 (1985), 519–521.
 class MpArith
@@ -185,156 +191,247 @@ static std::string usage()
 	return ss.str();
 }
 
-static bool read_sieve(std::vector<bool> & bsieve, uint64_t & p_pos, uint64_t & p_neg, const std::string & filename, const uint64_t b_min)
+class Sieve
 {
-	bool success = false;
-	std::ifstream file(filename);
-	if (file.good())
+private:
+	const int _n;
+	const uint64_t _b_min, _b_max;
+	std::vector<bool> _bsieve;
+	uint64_t _p_min_pos, _p_min_neg;
+	inline static volatile bool _quit = false;
+	std::string _filename;
+	std::chrono::high_resolution_clock::time_point _display_time, _record_time;
+
+private:
+	static void quit(int) { _quit = true; }
+
+#if defined(_WIN32)
+	static BOOL WINAPI HandlerRoutine(DWORD) { quit(1); return TRUE; }
+#endif
+
+public:
+	Sieve(const int n, const uint64_t b_min, const uint64_t b_max)
+		: _n(n), _b_min(b_min), _b_max(b_max), _bsieve(b_max - b_min + 1, false)
 	{
-		success = true;
-		bsieve.assign(bsieve.size(), true);
-		std::string line;
-		if (std::getline(file, line))
-		{
-			std::istringstream iss(line);
-			if (!(iss >> p_pos) || !(iss >> p_neg)) success = false;
-		}
-		while (std::getline(file, line))
-		{
-			std::istringstream iss(line);
-			uint64_t b; if (!(iss >> b)) continue;
-			bsieve[b - b_min] = false;
-		}
+		_p_min_pos = _p_min_neg = 0;
+		std::stringstream ss; ss << "ctsieve_" << n << "_" << b_min << "_" << b_max;
+		_filename = ss.str();
+
+#if defined(_WIN32)	
+		SetConsoleCtrlHandler(HandlerRoutine, TRUE);
+#else
+		signal(SIGTERM, quit);
+		signal(SIGINT, quit);
+#endif
 	}
-	file.close();
-	return success;
-}
 
-static bool write_sieve(const std::vector<bool> & bsieve, const uint64_t p_pos, const uint64_t p_neg, const std::string & filename, const uint64_t b_min)
-{
-	struct stat s;
-	std::string old_filename = filename + ".old";
-	std::remove(old_filename.c_str());
-	if ((stat(filename.c_str(), &s) == 0) && (std::rename(filename.c_str(), old_filename.c_str()) != 0))	// file exists and cannot rename it
+	virtual ~Sieve() {}
+
+public:
+	size_t get_size() const { return _bsieve.size(); }
+	size_t get_count() const { size_t count = 0; for (bool b : _bsieve) if (!b) count++; return count; }
+
+	std::string get_sieve_filename() const { return _filename + ".sv"; }
+	std::string get_cand_filename() const { return _filename + ".cand"; }
+	std::string get_res_filename() const { return _filename + ".res"; }
+
+	void set_p_min(const uint64_t p_pos, const uint64_t p_neg) { _p_min_pos = p_pos; _p_min_neg = p_neg; }
+
+	bool read()
 	{
-		return false;
-	}
-	std::ofstream file(filename);
-	file << p_pos << " " << p_neg << std::endl;
-	for (uint64_t i = 0, size = bsieve.size(); i < size; ++i) if (!bsieve[i]) file << b_min + i << std::endl;
-	file.close();
-	return true;
-}
+		bool success = false;
 
-static void check_pos(std::vector<bool> & bsieve, const int n, const uint64_t b_min, const uint64_t b_max, const uint64_t p_min, const uint64_t p_max)
-{
-	uint64_t k_min = (p_min >> n) / 3, k_max = (p_max >> n) / 3;
-	if (p_max != uint64_t(-1)) while (3 * (k_max << n) + 1 < p_max) ++k_max;
-
-	auto start = std::chrono::high_resolution_clock::now();
-
-	std::cout << "+1: for p = " << 3 * (k_min << n) + 1 << " to " << 3 * (k_max << n) + 1 << "." << std::endl;
-
-	for (uint64_t k = k_min; k <= k_max; ++k)
-	{
-		const uint64_t p = 3 * (k << n) + 1;
-
-		if ((p % 5 == 0) || (p % 7 == 0) || (p % 11 == 0) || (p % 13 == 0) || (p % 17 == 0)
-		 || (p % 19 == 0) || (p % 23 == 0) || (p % 29 == 0) || (p % 31 == 0)) continue;
-
-		MpArith mp(p);
-
-		if (mp.prp())
+		std::ifstream file(get_sieve_filename());
+		if (file.good())
 		{
-			auto end = std::chrono::high_resolution_clock::now();
-			if (std::chrono::duration<double>(end - start).count() > 1)
+			success = true;
+			_bsieve.assign(_bsieve.size(), true);
+			std::string line;
+			if (std::getline(file, line))
 			{
-				start = end;
-				std::cout << p << "\r";
+				std::istringstream iss(line);
+				if (!(iss >> _p_min_pos) || !(iss >> _p_min_neg)) success = false;
 			}
-
-			uint64_t a = 5;
-			while (true)
+			while (std::getline(file, line))
 			{
-				if ((jacobi(a, p) == -1) && (mp.pow(mp.toMp(a), k << (n - 1)) != p - mp.one())) break;
-				++a; if (a % 3 == 0) ++a;
-			}
-			const uint64_t c = mp.pow(mp.toMp(a), k), c2 = mp.mul(c, c);
-
-			for (uint64_t i = 1, b = mp.toInt(c); i < (uint64_t(3) << n); i += 2, b = mp.mul(b, c2))
-			{
-				if (i % 3 == 0) continue;
-
-				for (uint64_t s = b; s <= b_max; s += p)
-				{
-					if (s >= b_min)
-					{
-						if (!bsieve[s - b_min])
-						{
-							const uint64_t x = mp.pow_slow(s, 1 << (n - 1)), r = mp.sub(mp.mul_slow(x, x), x);
-							if (r == p - 1)	// May fail if p is not prime
-							{
-								bsieve[s - b_min] = true;
-							}
-						}
-					}
-				}
+				std::istringstream iss(line);
+				uint64_t b; if (!(iss >> b)) continue;
+				_bsieve[b - _b_min] = false;
 			}
 		}
+		file.close();
+
+		if (!success) std::cout << "Error reading file '" << get_sieve_filename() << "'." << std::endl;
+		return success;
 	}
-}
 
-static void check_neg(std::vector<bool> & bsieve, const int n, const uint64_t b_min, const uint64_t b_max, const uint64_t p_min, const uint64_t p_max)
-{
-	uint64_t k_min = p_min / 10, k_max = p_max / 10;
-	if (p_max != uint64_t(-1)) while (10 * k_max + 1 < p_max) ++k_max;
-
-	auto start = std::chrono::high_resolution_clock::now();
-
-	std::cout << "-1: for p = " << 10 * k_min - 1 << " to " << 10 * k_max + 1 << "." << std::endl;
-
-	for (uint64_t k = k_min; k <= k_max; ++k)
+	bool write() const
 	{
-		for (int i = 0; i <= 1; ++i)
+		struct stat s;
+		const std::string sieve_filename = get_sieve_filename(), old_filename = sieve_filename + ".old";
+		std::remove(old_filename.c_str());
+		if ((stat(sieve_filename.c_str(), &s) == 0) && (std::rename(sieve_filename.c_str(), old_filename.c_str()) != 0))	// file exists and cannot rename it
 		{
-			const uint64_t p = 10 * k + 2 * i - 1;
+			std::cout << "Error writing file '" << sieve_filename << "'." << std::endl;
+			return false;
+		}
 
-			if ((p % 3 == 0) || (p % 7 == 0)) continue;
-			if (p > 31)
+		const size_t size = get_size(), count = get_count();
+		std::ofstream file(sieve_filename);
+		file << _p_min_pos << " " << _p_min_neg << std::endl;
+		for (uint64_t i = 0; i < size; ++i) if (!_bsieve[i]) file << _b_min + i << std::endl;
+		file.close();
+
+		static const double C_p[21] = { 0, 2.2415, 4.6432, 8.0257, 7.6388, 6.1913, 6.9476, 10.2327, 10.3762, 14.1587, 14.6623, 14.5833,
+			12.0591, 20.4282, 20.0690, 23.1395, 20.7106, 18.7258, 17.8171, 29.1380, 30.2934 };
+		static const double C_m[21] = { 0, 3.54, 4.43, 4.65, 4.69, 4.66, 4.65, 4.65, 4.65, 4.65, 4.65, 4.65, 4.65, 4.65, 4.65, 4.65, 4.65, 4.65, 4.65, 4.65, 4.65 };
+		// #candidates = (e^-gamma)^2 * C_n+ * C_n- * (b_max - b_min) / log(p_max+) / log(p_max-)
+		const size_t expected = size_t(0.315236751687193398 * C_p[_n] * C_m[_n] * (_b_max - _b_min) / std::log(_p_min_pos) / std::log(_p_min_neg));
+		std::cout << "Remaining " << count << "/" << size << " candidates (" << count * 100.0 / size << "%), " << expected << " expected." << std::endl;
+
+		return true;
+	}
+
+	void init()
+	{
+		_display_time = _record_time = std::chrono::high_resolution_clock::now();
+	}
+
+	bool monitor(const uint64_t p)
+	{
+		auto now = std::chrono::high_resolution_clock::now();
+		if (std::chrono::duration<double>(now - _display_time).count() > 1)
+		{
+			_display_time = now;
+			std::cout << p << "\r";
+			if (std::chrono::duration<double>(now - _record_time).count() > 600)
 			{
-				if ((p % 11 == 0) || (p % 13 == 0) || (p % 17 == 0)	|| (p % 19 == 0)
-				 || (p % 23 == 0) || (p % 29 == 0) || (p % 31 == 0)) continue;
+				_record_time = now;
+				if (!write()) return false;
 			}
+		}
+		if (_quit)
+		{
+			write();
+			return false;
+		}
+		return true;
+	}
+
+	bool check_pos(const uint64_t p_max)
+	{
+		const int n = _n;
+		const uint64_t b_min = _b_min, b_max = _b_max;
+
+		uint64_t k_min = (_p_min_pos >> n) / 3, k_max = (p_max >> n) / 3;
+		if (p_max != uint64_t(-1)) while (3 * (k_max << n) + 1 < p_max) ++k_max;
+
+		init();
+
+		std::cout << "+1: for p = " << 3 * (k_min << n) + 1 << " to " << 3 * (k_max << n) + 1 << "." << std::endl;
+
+		for (uint64_t k = k_min; k <= k_max; ++k)
+		{
+			const uint64_t p = 3 * (k << n) + 1;
+
+			if ((p % 5 == 0) || (p % 7 == 0) || (p % 11 == 0) || (p % 13 == 0) || (p % 17 == 0)
+			|| (p % 19 == 0) || (p % 23 == 0) || (p % 29 == 0) || (p % 31 == 0)) continue;
 
 			MpArith mp(p);
 
 			if (mp.prp())
 			{
-				auto end = std::chrono::high_resolution_clock::now();
-				if (std::chrono::duration<double>(end - start).count() > 1)
+				uint64_t a = 5;
+				while (true)
 				{
-					start = end;
-					std::cout << p << "\r";
+					if ((jacobi(a, p) == -1) && (mp.pow(mp.toMp(a), k << (n - 1)) != p - mp.one())) break;
+					++a; if (a % 3 == 0) ++a;
 				}
+				const uint64_t c = mp.pow(mp.toMp(a), k), c2 = mp.mul(c, c);
 
-				for (uint64_t b = b_min; b <= b_max; ++b)
+				for (uint64_t i = 1, b = mp.toInt(c); i < (uint64_t(3) << n); i += 2, b = mp.mul(b, c2))
 				{
-					if (!bsieve[b - b_min])
+					if (i % 3 == 0) continue;
+
+					for (uint64_t s = b; s <= b_max; s += p)
 					{
-						const uint64_t x = mp.pow(mp.toMp(b), 1 << (n - 1));
-						const uint64_t r = mp.sub(mp.mul(x, x), x);
-						if (r == mp.one())
+						if (s >= b_min)
 						{
-							const uint64_t xp = mp.pow_slow(b, 1 << (n - 1)), rp = mp.sub(mp.mul_slow(xp, xp), xp);
-							if (rp != 1) std::cout << "Error detected" << std::endl;
-							bsieve[b - b_min] = true;
+							if (!_bsieve[s - b_min])
+							{
+								const uint64_t x = mp.pow_slow(s, 1 << (n - 1)), r = mp.sub(mp.mul_slow(x, x), x);
+								if (r == p - 1)	// May fail if p is not prime
+								{
+									_bsieve[s - b_min] = true;
+								}
+							}
 						}
 					}
 				}
+
+				_p_min_pos = p;
+
+				if (!monitor(p)) return false;
 			}
 		}
+
+		return true;
 	}
-}
+
+	bool check_neg(const uint64_t p_max)
+	{
+		const int n = _n;
+		const uint64_t b_min = _b_min, b_max = _b_max;
+
+		uint64_t k_min = _p_min_neg / 10, k_max = p_max / 10;
+		if (p_max != uint64_t(-1)) while (10 * k_max + 1 < p_max) ++k_max;
+
+		init();
+
+		std::cout << "-1: for p = " << 10 * k_min - 1 << " to " << 10 * k_max + 1 << "." << std::endl;
+
+		for (uint64_t k = k_min; k <= k_max; ++k)
+		{
+			for (int i = 0; i <= 1; ++i)
+			{
+				const uint64_t p = 10 * k + 2 * i - 1;
+
+				if ((p % 3 == 0) || (p % 7 == 0)) continue;
+				if (p > 31)
+				{
+					if ((p % 11 == 0) || (p % 13 == 0) || (p % 17 == 0)	|| (p % 19 == 0)
+					|| (p % 23 == 0) || (p % 29 == 0) || (p % 31 == 0)) continue;
+				}
+
+				MpArith mp(p);
+
+				if (mp.prp())
+				{
+					for (uint64_t b = b_min; b <= b_max; ++b)
+					{
+						if (!_bsieve[b - b_min])
+						{
+							const uint64_t x = mp.pow(mp.toMp(b), 1 << (n - 1));
+							const uint64_t r = mp.sub(mp.mul(x, x), x);
+							if (r == mp.one())
+							{
+								const uint64_t xp = mp.pow_slow(b, 1 << (n - 1)), rp = mp.sub(mp.mul_slow(xp, xp), xp);
+								if (rp != 1) std::cout << "Error detected" << std::endl;
+								_bsieve[b - b_min] = true;
+							}
+						}
+					}
+
+					_p_min_neg = p;
+
+					if (!monitor(p)) return false;
+				}
+			}
+		}
+
+		return true;
+	}
+};
 
 int main(int argc, char * argv[])
 {
@@ -372,43 +469,26 @@ int main(int argc, char * argv[])
 	if (b_max < b_min) b_max = b_min;
 	if ((mode < -1) || (mode > 1)) { std::cout << "mode must be <ini> or <+> or <->." << std::endl; return EXIT_FAILURE; }
 
-	std::stringstream ss; ss << "ctsieve_" << n << "_" << b_min << "_" << b_max;
-	const std::string cand_filename = ss.str() + ".cand";
-	// const std::string res_filename = ss.str() + ".res";
+	Sieve sieve(n, b_min, b_max);
 
-	std::vector<bool> bsieve(b_max - b_min + 1, false);
-
-	uint64_t p_min_pos = 0, p_min_neg = 0, p_max_pos = 0, p_max_neg = 0;
+	uint64_t p_max_pos, p_max_neg;
 	if (mode != 0)
 	{
-		if (!read_sieve(bsieve, p_min_pos, p_min_neg, cand_filename, b_min))
-		{
-			std::cout << "File '" << cand_filename << "' not found." << std::endl;
-			return EXIT_FAILURE;
-		}
-		// p_max_pos = p_max_neg = uint64_t(-1);
-		p_max_pos = 2 * p_min_pos + 1; p_max_neg = 2 * p_min_neg + 1;
+		if (!sieve.read()) return EXIT_FAILURE;
+		p_max_pos = p_max_neg = uint64_t(-1);
 	}
 	else
 	{
-		p_min_pos = 3 * (1ull << n) + 1; p_min_neg = 11;
-		p_max_pos = 3 * (1000000ull << n) + 1; p_max_neg = 10001ul;
+		sieve.set_p_min(3 * (1ull << n) + 1, 11);
+		p_max_pos = 3 * (100000000ull << n) + 1; p_max_neg = 100001ull;
 	}
 
 	std::cout << "ctwin-" << n << ": b in [" << b_min << ", " << b_max << "]." << std::endl;
 
-	if (mode >= 0) check_pos(bsieve, n, b_min, b_max, p_min_pos, p_max_pos);
-	if (mode <= 0) check_neg(bsieve, n, b_min, b_max, p_min_neg, p_max_neg);
+	if (mode >= 0) if (!sieve.check_pos(p_max_pos)) return EXIT_FAILURE;
+	if (mode <= 0) if (!sieve.check_neg(p_max_neg)) return EXIT_FAILURE;
 
-	size_t count = 0;
-	for (bool b : bsieve) if (b) count++;
-	std::cout << "Removed " << count << "/" << bsieve.size() << " candidates (" << count * 100.0 / bsieve.size() << "%)" << std::endl;
-
-	if (!write_sieve(bsieve, p_max_pos, p_max_neg, cand_filename, b_min))
-	{
-		std::cout << "Cannot write file '" << cand_filename << "'." << std::endl;
-		return EXIT_FAILURE;
-	}
+	if (!sieve.write()) return EXIT_FAILURE;
 
 	return EXIT_SUCCESS;
 }
