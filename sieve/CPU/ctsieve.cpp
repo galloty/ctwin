@@ -227,7 +227,7 @@ public:
 
 	virtual ~Sieve() {}
 
-public:
+private:
 	size_t get_size() const { return _bsieve.size(); }
 	size_t get_count() const { size_t count = 0; for (bool b : _bsieve) if (!b) count++; return count; }
 
@@ -235,9 +235,7 @@ public:
 	std::string get_cand_filename() const { return _filename + ".cand"; }
 	std::string get_res_filename() const { return _filename + ".res"; }
 
-	void set_p_min(const uint64_t p_pos, const uint64_t p_neg) { _p_min_pos = p_pos; _p_min_neg = p_neg; }
-
-	bool read()
+	void read()
 	{
 		bool success = false;
 
@@ -261,19 +259,22 @@ public:
 		}
 		file.close();
 
-		if (!success) std::cout << "Error reading file '" << get_sieve_filename() << "'." << std::endl;
-		return success;
+		if (!success)
+		{
+			std::ostringstream ss; ss << "Error reading file '" << get_sieve_filename() << "'.";
+			throw std::runtime_error(ss.str());
+		}
 	}
 
-	bool write() const
+	void write() const
 	{
 		struct stat s;
 		const std::string sieve_filename = get_sieve_filename(), old_filename = sieve_filename + ".old";
 		std::remove(old_filename.c_str());
 		if ((stat(sieve_filename.c_str(), &s) == 0) && (std::rename(sieve_filename.c_str(), old_filename.c_str()) != 0))	// file exists and cannot rename it
 		{
-			std::cout << "Error writing file '" << sieve_filename << "'." << std::endl;
-			return false;
+			std::ostringstream ss; ss << "Error writing file '" << sieve_filename << "'.";
+			throw std::runtime_error(ss.str());
 		}
 
 		const size_t size = get_size(), count = get_count();
@@ -288,13 +289,12 @@ public:
 		// #candidates = (e^-gamma)^2 * C_n+ * C_n- * (b_max - b_min) / log(p_max+) / log(p_max-)
 		const size_t expected = size_t(0.315236751687193398 * C_p[_n] * C_m[_n] * (_b_max - _b_min) / std::log(_p_min_pos) / std::log(_p_min_neg));
 		std::cout << "Remaining " << count << "/" << size << " candidates (" << count * 100.0 / size << "%), " << expected << " expected." << std::endl;
-
-		return true;
 	}
 
-	void init()
+	bool init()
 	{
 		_display_time = _record_time = std::chrono::high_resolution_clock::now();
+		return !_quit;
 	}
 
 	bool monitor(const uint64_t p)
@@ -307,18 +307,13 @@ public:
 			if (std::chrono::duration<double>(now - _record_time).count() > 600)
 			{
 				_record_time = now;
-				if (!write()) return false;
+				write();
 			}
 		}
-		if (_quit)
-		{
-			write();
-			return false;
-		}
-		return true;
+		return !_quit;
 	}
 
-	bool check_pos(const uint64_t p_max)
+	void check_pos(const uint64_t p_max)
 	{
 		const int n = _n;
 		const uint64_t b_min = _b_min, b_max = _b_max;
@@ -326,7 +321,7 @@ public:
 		uint64_t k_min = (_p_min_pos >> n) / 3, k_max = (p_max >> n) / 3;
 		if (p_max != uint64_t(-1)) while (3 * (k_max << n) + 1 < p_max) ++k_max;
 
-		init();
+		if (!init()) return;
 
 		std::cout << "+1: for p = " << 3 * (k_min << n) + 1 << " to " << 3 * (k_max << n) + 1 << "." << std::endl;
 
@@ -371,14 +366,12 @@ public:
 
 				_p_min_pos = p;
 
-				if (!monitor(p)) return false;
+				if (!monitor(p)) return;
 			}
 		}
-
-		return true;
 	}
 
-	bool check_neg(const uint64_t p_max)
+	void check_neg(const uint64_t p_max)
 	{
 		const int n = _n;
 		const uint64_t b_min = _b_min, b_max = _b_max;
@@ -386,7 +379,7 @@ public:
 		uint64_t k_min = _p_min_neg / 10, k_max = p_max / 10;
 		if (p_max != uint64_t(-1)) while (10 * k_max + 1 < p_max) ++k_max;
 
-		init();
+		if (!init()) return;
 
 		std::cout << "-1: for p = " << 10 * k_min - 1 << " to " << 10 * k_max + 1 << "." << std::endl;
 
@@ -416,7 +409,7 @@ public:
 							if (r == mp.one())
 							{
 								const uint64_t xp = mp.pow_slow(b, 1 << (n - 1)), rp = mp.sub(mp.mul_slow(xp, xp), xp);
-								if (rp != 1) std::cout << "Error detected" << std::endl;
+								if (rp != 1) throw std::runtime_error("Calculation error.");
 								_bsieve[b - b_min] = true;
 							}
 						}
@@ -424,12 +417,33 @@ public:
 
 					_p_min_neg = p;
 
-					if (!monitor(p)) return false;
+					if (!monitor(p)) return;
 				}
 			}
 		}
+	}
 
-		return true;
+public:
+	void check(const int mode)
+	{
+		uint64_t p_max_pos, p_max_neg;
+		if (mode != 0)
+		{
+			read();
+			p_max_pos = p_max_neg = uint64_t(-1);
+		}
+		else
+		{
+			_p_min_pos = 3 * (1ull << _n) + 1; _p_min_neg = 11;
+			p_max_pos = 3 * (100000000ull << _n) + 1; p_max_neg = 100001ull;
+		}
+
+		std::cout << "ctwin-" << _n << ": b in [" << _b_min << ", " << _b_max << "]." << std::endl;
+
+		if (mode >= 0) check_pos(p_max_pos);
+		if (mode <= 0) check_neg(p_max_neg);
+
+		write();
 	}
 };
 
@@ -443,7 +457,7 @@ int main(int argc, char * argv[])
 	if (argc != 5)
 	{
 		std::cout << usage();
-		return EXIT_FAILURE;
+		return EXIT_SUCCESS;
 	}
 
 	int n = 0, mode = 2;
@@ -461,34 +475,25 @@ int main(int argc, char * argv[])
 	catch (...)
 	{
 		std::cout << usage();
-		return EXIT_FAILURE;
+		return EXIT_SUCCESS;
 	}
 
-	if ((n < 8) || (n > 24)) { std::cout << "n must be in [8, 24]." << std::endl; return EXIT_FAILURE; }
+	if ((n < 8) || (n > 24)) { std::cerr << "n must be in [8, 24]." << std::endl; return EXIT_FAILURE; }
 	if (b_min < 2) b_min = 2;
 	if (b_max < b_min) b_max = b_min;
-	if ((mode < -1) || (mode > 1)) { std::cout << "mode must be <ini> or <+> or <->." << std::endl; return EXIT_FAILURE; }
+	if ((mode < -1) || (mode > 1)) { std::cerr << "mode must be <ini> or <+> or <->." << std::endl; return EXIT_FAILURE; }
 
 	Sieve sieve(n, b_min, b_max);
 
-	uint64_t p_max_pos, p_max_neg;
-	if (mode != 0)
+	try
 	{
-		if (!sieve.read()) return EXIT_FAILURE;
-		p_max_pos = p_max_neg = uint64_t(-1);
+		sieve.check(mode);
 	}
-	else
+	catch (const std::runtime_error & e)
 	{
-		sieve.set_p_min(3 * (1ull << n) + 1, 11);
-		p_max_pos = 3 * (100000000ull << n) + 1; p_max_neg = 100001ull;
+		std::cerr << e.what() << std::endl;
+		return EXIT_FAILURE;
 	}
-
-	std::cout << "ctwin-" << n << ": b in [" << b_min << ", " << b_max << "]." << std::endl;
-
-	if (mode >= 0) if (!sieve.check_pos(p_max_pos)) return EXIT_FAILURE;
-	if (mode <= 0) if (!sieve.check_neg(p_max_neg)) return EXIT_FAILURE;
-
-	if (!sieve.write()) return EXIT_FAILURE;
 
 	return EXIT_SUCCESS;
 }
