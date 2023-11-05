@@ -20,6 +20,113 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <signal.h>
 #endif
 
+// Modular operations, slow implementation
+class Mod
+{
+private:
+	const uint64_t _n;
+
+private:
+	static constexpr int ilog2(const uint64_t x) { return 63 - __builtin_clzll(x); }
+
+public:
+	Mod(const uint64_t n) : _n(n) { }
+
+	uint64_t add(const uint64_t a, const uint64_t b) const
+	{
+		const uint64_t c = (a >= _n - b) ? _n : 0;
+		return a + b - c;
+	}
+
+	uint64_t sub(const uint64_t a, const uint64_t b) const
+	{
+		const uint64_t c = (a < b) ? _n : 0;
+		return a - b + c;
+	}
+
+	uint64_t mul(const uint64_t a, const uint64_t b) const
+	{
+		return uint64_t((a * __uint128_t(b)) % _n);
+	}
+
+	// a^e mod n, left-to-right algorithm
+	uint64_t pow(const uint64_t a, const uint64_t e) const
+	{
+		uint64_t r = a;
+		for (int b = ilog2(e) - 1; b >= 0; --b)
+		{
+			r = mul(r, r);
+			if ((e & (uint64_t(1) << b)) != 0) r = mul(r, a);
+		}
+		return r;
+	}
+
+	bool spsp(const uint64_t p) const
+	{
+		// n - 1 = 2^k * r
+		uint64_t r = _n - 1;
+		int k = 0;
+		for (; r % 2 == 0; r /= 2) ++k;
+
+		uint64_t x = pow(p, r);
+		if (x == 1) return true;
+
+		// Compute x^(2^i) for 0 <= i < n.  If any are -1, n is a p-spsp.
+		for (; k > 0; --k)
+		{
+			if (x == _n - 1) return true;
+			x = mul(x, x);
+		}
+
+		return false;
+	}
+
+	bool isprime() const
+	{
+		if (_n < 2) return false;
+		if (_n % 2 == 0) return (_n == 2);
+		if (_n < 9) return true;
+
+		// see https://oeis.org/A014233
+
+		if (!spsp(2)) return false;
+		if (_n < 2047ull) return true;
+
+		if (!spsp(3)) return false;
+		if (_n < 1373653ull) return true;
+
+		if (!spsp(5)) return false;
+		if (_n < 25326001ull) return true;
+
+		if (!spsp(7)) return false;
+		if (_n < 3215031751ull) return true;
+
+		if (!spsp(11)) return false;
+		if (_n < 2152302898747ull) return true;
+
+		if (!spsp(13)) return false;
+		if (_n < 3474749660383ull) return true;
+
+		if (!spsp(17)) return false;
+		if (_n < 341550071728321ull) return true;
+
+		if (!spsp(19)) return false;
+		// if (_n < 341550071728321ull) return true;
+
+		if (!spsp(23)) return false;
+		if (_n < 3825123056546413051ull) return true;
+
+		if (!spsp(29)) return false;
+		// if (_n < 3825123056546413051ull) return true;
+
+		if (!spsp(31)) return false;
+		// if (_n < 3825123056546413051ull) return true;
+
+		if (!spsp(37)) return false;
+		return true;	// 318665857834031151167461
+	}
+};
+
 // Peter L. Montgomery, Modular multiplication without trial division, Math. Comp.44 (1985), 519–521.
 class MpArith
 {
@@ -105,19 +212,6 @@ public:
 			if ((e & (uint64_t(1) << b)) != 0) r = add(r, r);
 		}
 		return ((r == _one) || (r == _p - _one));
-	}
-
-	uint64_t mul_slow(const uint64_t a, const uint64_t b) const { return uint64_t((a * __uint128_t(b)) % _p); }
-
-	uint64_t pow_slow(const uint64_t a, const uint64_t e) const
-	{
-		uint64_t r = a;
-		for (int b = ilog2(e) - 1; b >= 0; --b)
-		{
-			r = mul_slow(r, r);
-			if ((e & (uint64_t(1) << b)) != 0) r = mul_slow(r, a);
-		}
-		return r;
 	}
 };
 
@@ -354,10 +448,12 @@ private:
 						{
 							if (!_bsieve[s - b_min])
 							{
-								const uint64_t x = mp.pow_slow(s, 1 << (n - 1)), r = mp.sub(mp.mul_slow(x, x), x);
-								if (r == p - 1)	// May fail if p is not prime
+								Mod mod(p);
+								const uint64_t x = mod.pow(s, 1 << (n - 1)), r = mod.sub(mod.mul(x, x), x);
+								if (r == p - 1) _bsieve[s - b_min] = true;
+								else // May fail if p is not prime
 								{
-									_bsieve[s - b_min] = true;
+									if (mod.isprime()) throw std::runtime_error("Calculation error.");
 								}
 							}
 						}
@@ -408,7 +504,8 @@ private:
 							const uint64_t r = mp.sub(mp.mul(x, x), x);
 							if (r == mp.one())
 							{
-								const uint64_t xp = mp.pow_slow(b, 1 << (n - 1)), rp = mp.sub(mp.mul_slow(xp, xp), xp);
+								Mod mod(p);
+								const uint64_t xp = mod.pow(b, 1 << (n - 1)), rp = mod.sub(mod.mul(xp, xp), xp);
 								if (rp != 1) throw std::runtime_error("Calculation error.");
 								_bsieve[b - b_min] = true;
 							}
