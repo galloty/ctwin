@@ -23,18 +23,11 @@ typedef std::array<uint32, VSIZE> vint32;
 class transform
 {
 private:
-	static const uint32_t P1 = 4293918721u;			// 4095 * 2^20 + 1
-	static const uint32_t P2 = 4253024257u;			// 507 * 2^23 + 1
-	static const uint32_t P3 = 4231004161u;			// 4035 * 2^20 + 1
+	static const uint32 P1 = 4293918721u;	// 4095 * 2^20 + 1
+	static const uint32 P2 = 4253024257u;	//  507 * 2^23 + 1
+	static const uint32 P3 = 4231004161u;	// 4035 * 2^20 + 1
+	// static const uint32 P4 = 4221566977u;	// 2013 * 2^21 + 1
 
-// p, a = proot^((p-1)/6), -a^2, proot
-// 4293918721, 3592176615,  701742107, 19	4095 * 2^20 + 1
-// 4253024257, 3673267258,  579757000,  5	 507 * 2^23 + 1
-// 4231004161, 3214729877, 1016274285,  7	4035 * 2^20 + 1
-// 4221566977, 3270332003,  951234975,  5	2013 * 2^21 + 1
-
-// z1^3 = -1 mod P1: z1 = 3673267258, -z1^2 = 579757000
-// z1^3 = -1 mod P3: z3 = 2038487041, -z3^2 = 2038376449
 private:
 	template <uint32 p, uint32 prRoot>
 	class Zp
@@ -45,12 +38,11 @@ private:
 	private:
 		explicit Zp(const uint32 n) : _n(n) {}
 
-		Zp _mulMod(const Zp & rhs) const { return Zp(static_cast<uint32>((_n * uint64(rhs._n)) % p)); }
-
 	public:
 		Zp() {}
 		explicit Zp(const int32_t i) : _n((i < 0) ? p - static_cast<uint32>(-i) : static_cast<uint32>(i)) {}
 
+		static uint32 getp() { return p; }
 		uint32 get() const { return _n; }
 		int32_t getInt() const { return (_n > p / 2) ? static_cast<int32_t>(_n - p) : static_cast<int32_t>(_n); }
 
@@ -58,8 +50,13 @@ private:
 
 		Zp operator-() const { return Zp((_n != 0) ? p - _n : 0); }
 
-		Zp & operator*=(const Zp & rhs) { *this = _mulMod(rhs); return *this; }
-		Zp operator*(const Zp & rhs) const { return _mulMod(rhs); }
+		Zp & operator+=(const Zp & rhs) { const uint32 c = (_n >= p - rhs._n) ? p : 0; _n = _n + rhs._n - c; return *this; }
+		Zp & operator-=(const Zp & rhs) { const uint32 c = (_n < rhs._n) ? p : 0; _n = _n - rhs._n + c; return *this; }
+		Zp & operator*=(const Zp & rhs) { _n = static_cast<uint32>((_n * uint64_t(rhs._n)) % p); return *this; }
+
+		Zp operator+(const Zp & rhs) const { Zp r = *this; r += rhs; return r; }
+		Zp operator-(const Zp & rhs) const { Zp r = *this; r -= rhs; return r; }
+		Zp operator*(const Zp & rhs) const { Zp r = *this; r *= rhs; return r; }
 
 		Zp pow(const uint32_t e) const
 		{
@@ -131,6 +128,7 @@ private:
 	typedef Zp<P1, 19> Zp1;
 	typedef Zp<P2, 5> Zp2;
 	typedef Zp<P3, 7> Zp3;
+	// typedef Zp<P4, 5> Zp3;
 
 	typedef MForm<P1> MForm1;
 	typedef MForm<P2> MForm2;
@@ -156,7 +154,13 @@ private:
 
 		RNS_T operator-() const { return RNS_T(-r1(), -r2()); }
 
+		RNS_T operator+(const RNS_T & rhs) const { return RNS_T(r1() + rhs.r1(), r2() + rhs.r2()); }
+		RNS_T operator-(const RNS_T & rhs) const { return RNS_T(r1() - rhs.r1(), r2() - rhs.r2()); }
+		RNS_T operator*(const RNS_T & rhs) const { return RNS_T(r1() * rhs.r1(), r2() * rhs.r2()); }
+
 		RNS_T pow(const uint32_t e) const { return RNS_T(r1().pow(e), r2().pow(e)); }
+
+		RNS_T invert() const { return RNS_T(r1().pow(Zp1::getp() - 2), r2().pow(Zp2::getp() - 2)); }
 
 		// Conversion into Montgomery form
 		RNS_T toMonty() const
@@ -196,9 +200,13 @@ private:
 
 		RNSe_T operator-() const { return RNSe_T(-r3()); }
 
+		RNSe_T operator+(const RNSe_T & rhs) const { return RNSe_T(r3() + rhs.r3()); }
+		RNSe_T operator-(const RNSe_T & rhs) const { return RNSe_T(r3() - rhs.r3()); }
 		RNSe_T operator*(const RNSe_T & rhs) const { return RNSe_T(r3() * rhs.r3()); }
 
 		RNSe_T pow(const uint32_t e) const { return RNSe_T(r3().pow(e)); }
+
+		RNSe_T invert() const { return RNSe_T(r3().pow(Zp3::getp() - 2)); }
 
 		// Conversion into Montgomery form
 		RNSe_T toMonty() const
@@ -333,20 +341,23 @@ private:
 
 		for (size_t s = 1; s < n; s *= 2)
 		{
-			const size_t a = 2;	// CYCLO => 3
-			const size_t m = 2 * a * s;
-			const RNS prRoot_m = RNS::prRoot_n(static_cast<uint32_t>(m));
-			const RNSe prRoot_me = RNSe::prRoot_n(static_cast<uint32_t>(m));
-			for (size_t i = 0; i < s; ++i)
+			const RNS r_s = RNS::prRoot_n(static_cast<uint32_t>(6 * s));
+			const RNSe r_se = RNSe::prRoot_n(static_cast<uint32_t>(6 * s));
+			for (size_t j = 0; j < s; ++j)
 			{
-				// const size_t r = bitRev(2 * j, 2 * s);
-				// w_s[3 * j + 0] = Complex::exp2iPi(a * r + 1, 4 * a * s);
-
-				const size_t e = bitRev(i, s);
-				const RNS wrsi = prRoot_m.pow(static_cast<uint32_t>(a * e + 1));
-				wr[s + i] = wrsi.toMonty().get(); wri[s + s - i - 1] = RNS(-wrsi).toMonty().get();
-				const RNSe wrsie = prRoot_me.pow(static_cast<uint32_t>(a * e + 1));
-				wre[s + i] = wrsie.toMonty().get(); wrie[s + s - i - 1] = RNSe(-wrsie).toMonty().get();
+				const uint32_t j_s = static_cast<uint32_t>(3 * bitRev(j, s) + 1 + (2 * j) / s);
+				const RNS wrsj = r_s.pow(j_s);
+				wr[s + j] = wrsj.toMonty().get(); wri[s + s - j - 1] = RNS(-wrsj).toMonty().get();
+				const RNSe wrsje = r_se.pow(j_s);
+				wre[s + j] = wrsje.toMonty().get(); wrie[s + s - j - 1] = RNSe(-wrsje).toMonty().get();
+			}
+			if (s == 1)
+			{
+				wri[0] = wr[1]; wrie[0] = wre[1];
+				const RNS dsr_inv = RNS(RNS(1) - (r_s + r_s)).invert();
+				const RNSe dsr_inve = RNSe(RNSe(1) - (r_se + r_se)).invert();
+				wri[1] = RNS(dsr_inv + dsr_inv).toMonty().get();
+				wrie[1] = RNSe(dsr_inve + dsr_inve).toMonty().get();
 			}
 		}
 
@@ -514,17 +525,28 @@ public:
 
 		for (size_t i = 0; i < VSIZE; ++i)
 		{
-			int64 e = f[i];
-			while (e != 0)
+			while (f[i] != 0)
 			{
-				e = -e;		// a_0 = -a_n
-				for (size_t j = 0; j < n; ++j)
+				int64 e = -f[i];
+
+				for (size_t j = 0; j < n / 2; ++j)
+				{
+					const size_t k = j * VSIZE + i;
+					e += int32(x[k]);
+					x[k] = reduce(e, b[i]);
+				}
+
+				e += f[i];
+
+				for (size_t j = n / 2; j < n; ++j)
 				{
 					const size_t k = j * VSIZE + i;
 					e += int32(x[k]);
 					x[k] = reduce(e, b[i]);
 					if (e == 0) break;
 				}
+
+				f[i] = e;
 			}
 		}
 	}

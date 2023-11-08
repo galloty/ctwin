@@ -276,14 +276,14 @@ static const char * const src_ocl_kernel = \
 "inline void frwd41_0_P12(uint32_2 * const u_P12, const uint32_2 w12_1)\n" \
 "{\n" \
 "	const uint32_2 u2w1_P12 = mul_P12(u_P12[2], w12_1), u3w1_P12 = mul_P12(u_P12[3], w12_1);\n" \
-"	u_P12[2] = sub_P12(u_P12[0], u2w1_P12); u_P12[0] = add_P12(u_P12[0], u2w1_P12);\n" \
-"	u_P12[3] = sub_P12(u_P12[1], u3w1_P12); u_P12[1] = add_P12(u_P12[1], u3w1_P12);\n" \
+"	u_P12[2] = add_P12(u_P12[2], sub_P12(u_P12[0], u2w1_P12)); u_P12[0] = add_P12(u_P12[0], u2w1_P12);\n" \
+"	u_P12[3] = add_P12(u_P12[3], sub_P12(u_P12[1], u3w1_P12)); u_P12[1] = add_P12(u_P12[1], u3w1_P12);\n" \
 "}\n" \
 "inline void frwd41_0_P3(uint32 * const u_P3, const uint32 w3_1)\n" \
 "{\n" \
 "	const uint32 u2w1_P3 = mul_P3(u_P3[2], w3_1), u3w1_P3 = mul_P3(u_P3[3], w3_1);\n" \
-"	u_P3[2] = sub_P3(u_P3[0], u2w1_P3); u_P3[0] = add_P3(u_P3[0], u2w1_P3);\n" \
-"	u_P3[3] = sub_P3(u_P3[1], u3w1_P3); u_P3[1] = add_P3(u_P3[1], u3w1_P3);\n" \
+"	u_P3[2] = add_P3(u_P3[2], sub_P3(u_P3[0], u2w1_P3)); u_P3[0] = add_P3(u_P3[0], u2w1_P3);\n" \
+"	u_P3[3] = add_P3(u_P3[3], sub_P3(u_P3[1], u3w1_P3)); u_P3[1] = add_P3(u_P3[1], u3w1_P3);\n" \
 "}\n" \
 "\n" \
 "inline void frwd42_P12(uint32_2 * const u_P12, const uint32_2 w12_2, const uint32_2 w12_3)\n" \
@@ -325,17 +325,23 @@ static const char * const src_ocl_kernel = \
 "	u_P3[1] = add_P3(u_P3[1], u_P3[3]); u_P3[3] = mul_P3(v3_P3, wi3_1);\n" \
 "}\n" \
 "\n" \
-"inline void bkwd41_0_P12(uint32_2 * const u_P12, const uint32_2 wi12_1)\n" \
+"inline void bkwd41_0_P12(uint32_2 * const u_P12, const uint32_2 wi12_0, const uint32_2 wi12_1)\n" \
 "{\n" \
-"	const uint32_2 v2_P12 = sub_P12(u_P12[0], u_P12[2]), v3_P12 = sub_P12(u_P12[1], u_P12[3]);\n" \
-"	u_P12[0] = add_P12(u_P12[0], u_P12[2]); u_P12[2] = mul_P12(v2_P12, wi12_1);\n" \
-"	u_P12[1] = add_P12(u_P12[1], u_P12[3]); u_P12[3] = mul_P12(v3_P12, wi12_1);\n" \
+"	const uint32_2 v2_P12 = mul_P12(wi12_0, add_P12(u_P12[0], u_P12[2]));\n" \
+"	const uint32_2 v3_P12 = mul_P12(wi12_0, add_P12(u_P12[1], u_P12[3]));\n" \
+"	u_P12[2] = mul_P12(wi12_1, sub_P12(u_P12[2], u_P12[0]));\n" \
+"	u_P12[0] = mul_P12(wi12_1, sub_P12(u_P12[0], v2_P12));\n" \
+"	u_P12[3] = mul_P12(wi12_1, sub_P12(u_P12[3], u_P12[1]));\n" \
+"	u_P12[1] = mul_P12(wi12_1, sub_P12(u_P12[1], v3_P12));\n" \
 "}\n" \
-"inline void bkwd41_0_P3(uint32 * const u_P3, const uint32 wi3_1)\n" \
+"inline void bkwd41_0_P3(uint32 * const u_P3, const uint32 wi3_0, const uint32 wi3_1)\n" \
 "{\n" \
-"	const uint32 v2_P3 = sub_P3(u_P3[0], u_P3[2]), v3_P3 = sub_P3(u_P3[1], u_P3[3]);\n" \
-"	u_P3[0] = add_P3(u_P3[0], u_P3[2]); u_P3[2] = mul_P3(v2_P3, wi3_1);\n" \
-"	u_P3[1] = add_P3(u_P3[1], u_P3[3]); u_P3[3] = mul_P3(v3_P3, wi3_1);\n" \
+"	const uint32 v2_P3 = mul_P3(wi3_0, add_P3(u_P3[0], u_P3[2]));\n" \
+"	const uint32 v3_P3 = mul_P3(wi3_0, add_P3(u_P3[1], u_P3[3]));\n" \
+"	u_P3[2] = mul_P3(wi3_1, sub_P3(u_P3[2], u_P3[0]));\n" \
+"	u_P3[0] = mul_P3(wi3_1, sub_P3(u_P3[0], v2_P3));\n" \
+"	u_P3[3] = mul_P3(wi3_1, sub_P3(u_P3[3], u_P3[1]));\n" \
+"	u_P3[1] = mul_P3(wi3_1, sub_P3(u_P3[1], v3_P3));\n" \
 "}\n" \
 "\n" \
 "inline void sqr42_P12(uint32_2 * const u_P12, const uint32_2 w12_2, const uint32_2 w12_3)\n" \
@@ -751,11 +757,11 @@ static const char * const src_ocl_kernel = \
 "\n" \
 "	const sz_t vid_blk = (vid & (sz_t)~(4 * m - 1)) * 4, idl = get_group_id(0) & (m - 1);\n" \
 "	const sz_t k0 = (reg * NSIZE + (vid_blk + idl)) * VSIZE + l, miv = iv << lm;\n" \
-"	const sz_t sj4 = 4 + (vid_blk >> (lm + 2)) + i, sj = 1;\n" \
+"	const sz_t sj4 = 4 + (vid_blk >> (lm + 2)) + i;\n" \
 "\n" \
 "	uint32_2 u_P12[4]; read4_P12(u_P12, x12, k0 + miv, 4 * m); uint32 u_P3[4]; read4_P3(u_P3, x3, k0 + miv, 4 * m);\n" \
-"	frwd41_0_P12(u_P12, wr12[sj]); frwd41_0_P3(u_P3, wr3[sj]);\n" \
-"	frwd42_P12(u_P12, wr12[2 * sj], wr12[2 * sj + 1]); frwd42_P3(u_P3, wr3[2 * sj], wr3[2 * sj + 1]);\n" \
+"	frwd41_0_P12(u_P12, wr12[1]); frwd41_0_P3(u_P3, wr3[1]);\n" \
+"	frwd42_P12(u_P12, wr12[2], wr12[3]); frwd42_P3(u_P3, wr3[2], wr3[3]);\n" \
 "	write4l_P12(X12, u_P12, iv + l, 4); write4l_P3(X3, u_P3, iv + l, 4);\n" \
 "\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
@@ -826,7 +832,7 @@ static const char * const src_ocl_kernel = \
 "\n" \
 "	const sz_t vid_blk = (vid & (sz_t)~(4 * m - 1)) * 4, idl = get_group_id(0) & (m - 1);\n" \
 "	const sz_t k0 = VSIZE * (vid_blk + idl) + l, miv = iv << lm;\n" \
-"	const sz_t sj4 = 4 + (vid_blk >> (lm + 2)) + i, sj = 1;\n" \
+"	const sz_t sj4 = 4 + (vid_blk >> (lm + 2)) + i;\n" \
 "\n" \
 "	uint32_2 v_P12[4]; read4_P12(v_P12, x12, k0 + 4 * miv, m); uint32 v_P3[4]; read4_P3(v_P3, x3, k0 + 4 * miv, m);\n" \
 "	bkwd42_P12(v_P12, wri12[2 * sj4], wri12[2 * sj4 + 1]); bkwd42_P3(v_P3, wri3[2 * sj4], wri3[2 * sj4 + 1]);\n" \
@@ -836,8 +842,8 @@ static const char * const src_ocl_kernel = \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
 "\n" \
 "	uint32_2 u_P12[4]; read4l_P12(u_P12, X12, iv + l, 4); uint32 u_P3[4]; read4l_P3(u_P3, X3, iv + l, 4);\n" \
-"	bkwd42_P12(u_P12, wri12[2 * sj], wri12[2 * sj + 1]); bkwd42_P3(u_P3, wri3[2 * sj], wri3[2 * sj + 1]);\n" \
-"	bkwd41_0_P12(u_P12, wri12[sj]); bkwd41_0_P3(u_P3, wri3[sj]);\n" \
+"	bkwd42_P12(u_P12, wri12[2], wri12[3]); bkwd42_P3(u_P3, wri3[2], wri3[3]);\n" \
+"	bkwd41_0_P12(u_P12, wri12[0], wri12[1]); bkwd41_0_P3(u_P3, wri3[0], wri3[1]);\n" \
 "	write4_P12(x12, u_P12, k0 + miv, 4 * m); write4_P3(x3, u_P3, k0 + miv, 4 * m);\n" \
 "}\n" \
 "\n" \
@@ -869,13 +875,15 @@ static const char * const src_ocl_kernel = \
 "void normalize2(const __global uint32_2 * restrict const bb_inv, const __global int32 * restrict const bs,\n" \
 "				const __global int64 * restrict const f, __global uint32_2 * restrict const x12, __global uint32 * restrict const x3)\n" \
 "{\n" \
+"	// get_global_size(0) is VSIZE * NSIZE / CSIZE\n" \
 "	const sz_t id = (sz_t)get_global_id(0);\n" \
-"	const sz_t i = id % VSIZE, j = (id / VSIZE + 1) & (get_global_size(0) / VSIZE - 1);\n" \
+"	const sz_t i = id % VSIZE, j = (id / VSIZE + 1) & (NSIZE / CSIZE - 1);\n" \
 "	const uint32 b = bb_inv[i].s0, b_inv = bb_inv[i].s1;\n" \
 "	const int32 b_s = bs[i];\n" \
 "	int64 a = f[id];\n" \
 "	const sz_t k0 = j * (VSIZE * CSIZE) + i;\n" \
-"	if (j == 0) a = -a;	// a_0 = -a_n\n" \
+"	if (j == 0) a = -a;\n" \
+"	else if (j == NSIZE / CSIZE / 2) a += f[id + VSIZE * NSIZE / CSIZE / 2];\n" \
 "\n" \
 "	sz_t c;\n" \
 "	for (c = 0; c < CSIZE - 1; ++c)\n" \

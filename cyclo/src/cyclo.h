@@ -297,10 +297,9 @@ public:
 		{
 			mpz_init(exponent[j]);
 
-			mpz_ui_pow_ui(exponent[j], b[j], 1u << n);
-			// mpz_ui_pow_ui(e, b[j], 1u << (n - 1));	// CYCLO
-			// mpz_mul(exponent[j], e, e);
-			// mpz_sub(exponent[j], exponent[j], e);
+			mpz_ui_pow_ui(e, b[j], 1u << (n - 1));
+			mpz_mul(exponent[j], e, e);
+			mpz_sub(exponent[j], exponent[j], e);
 
 			i0 = std::max(i0, int(mpz_sizeinbase(exponent[j], 2) - 1));
 		}
