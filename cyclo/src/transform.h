@@ -23,10 +23,18 @@ typedef std::array<uint32, VSIZE> vint32;
 class transform
 {
 private:
-	static const uint32_t P1 = 4253024257u;			// 507 * 2^23 + 1
-	static const uint32_t P2 = 4194304001u;			// 125 * 2^25 + 1
-	static const uint32_t P3 = 4076863489u;			// 243 * 2^24 + 1
+	static const uint32_t P1 = 4293918721u;			// 4095 * 2^20 + 1
+	static const uint32_t P2 = 4253024257u;			// 507 * 2^23 + 1
+	static const uint32_t P3 = 4231004161u;			// 4035 * 2^20 + 1
 
+// p, a = proot^((p-1)/6), -a^2, proot
+// 4293918721, 3592176615,  701742107, 19	4095 * 2^20 + 1
+// 4253024257, 3673267258,  579757000,  5	 507 * 2^23 + 1
+// 4231004161, 3214729877, 1016274285,  7	4035 * 2^20 + 1
+// 4221566977, 3270332003,  951234975,  5	2013 * 2^21 + 1
+
+// z1^3 = -1 mod P1: z1 = 3673267258, -z1^2 = 579757000
+// z1^3 = -1 mod P3: z3 = 2038487041, -z3^2 = 2038376449
 private:
 	template <uint32 p, uint32 prRoot>
 	class Zp
@@ -120,8 +128,8 @@ private:
 		}
 	};
 
-	typedef Zp<P1, 5> Zp1;
-	typedef Zp<P2, 3> Zp2;
+	typedef Zp<P1, 19> Zp1;
+	typedef Zp<P2, 5> Zp2;
 	typedef Zp<P3, 7> Zp3;
 
 	typedef MForm<P1> MForm1;
@@ -288,6 +296,7 @@ private:
 		MForm1 mf1; MForm2 mf2; MForm3 mf3;
 		src << "#define\tVSIZE\t" << VSIZE << std::endl;
 		src << "#define\tNSIZE\t" << n << std::endl;
+		src << "#define\tLNSIZE\t" << this->_ln << std::endl;
 		src << "#define\tCSIZE\t" << csize << std::endl << std::endl;
 		src << "#define\tNORM1\t" << mf1.toMonty(Zp1::norm(n).get()) << "u" << std::endl;
 		src << "#define\tNORM2\t" << mf2.toMonty(Zp2::norm(n).get()) << "u" << std::endl;
@@ -303,13 +312,13 @@ private:
 		src << "#define\tR3\t" << mf3.r2() << "u" << std::endl;
 		src << "#define\tP1_INV\t" << static_cast<uint64_t>(-1) / P1 - (static_cast<uint64_t>(1) << 32) << "u" << std::endl;
 		src << "#define\tP2_INV\t" << static_cast<uint64_t>(-1) / P2 - (static_cast<uint64_t>(1) << 32) << "u" << std::endl;
-		src << "#define\tInvP2_P1\t" << 1822724754u << "u" << std::endl;
-		src << "#define\tInvP3_P1\t" << 607574918u << "u" << std::endl;
-		src << "#define\tInvP3_P2\t" << 2995931465u << "u" << std::endl;
-		src << "#define\tP1P2P3l\t" << 15383592652180029441ull << "ul" << std::endl;
-		src << "#define\tP1P2P3h\t" << 3942432002u << "u" << std::endl;
-		src << "#define\tP1P2P3_2l\t" << 7691796326090014720ull << "ul" << std::endl;
-		src << "#define\tP1P2P3_2h\t" << 1971216001u << "u" << std::endl;
+		src << "#define\tInvP2_P1\t" << 105u << "u" << std::endl;
+		src << "#define\tInvP3_P1\t" << 3220439109u << "u" << std::endl;
+		src << "#define\tInvP3_P2\t" << 607575087u << "u" << std::endl;
+		src << "#define\tP1P2P3l\t" << 8307431584695320577ull << "ul" << std::endl;
+		src << "#define\tP1P2P3h\t" << 4188662890u << "u" << std::endl;
+		src << "#define\tP1P2P3_2l\t" << 4153715792347660288ull << "ul" << std::endl;
+		src << "#define\tP1P2P3_2h\t" << 2094331445u << "u" << std::endl;
 		src << std::endl;
 
 		// if xxx.cl file is not found then source is src_ocl_xxx string in src/ocl/xxx.h
@@ -324,15 +333,19 @@ private:
 
 		for (size_t s = 1; s < n; s *= 2)
 		{
-			const size_t m = 4 * s;
+			const size_t a = 2;	// CYCLO => 3
+			const size_t m = 2 * a * s;
 			const RNS prRoot_m = RNS::prRoot_n(static_cast<uint32_t>(m));
 			const RNSe prRoot_me = RNSe::prRoot_n(static_cast<uint32_t>(m));
 			for (size_t i = 0; i < s; ++i)
 			{
-				const size_t e = bitRev(i, 2 * s) + 1;
-				const RNS wrsi = prRoot_m.pow(static_cast<uint32_t>(e));
+				// const size_t r = bitRev(2 * j, 2 * s);
+				// w_s[3 * j + 0] = Complex::exp2iPi(a * r + 1, 4 * a * s);
+
+				const size_t e = bitRev(i, s);
+				const RNS wrsi = prRoot_m.pow(static_cast<uint32_t>(a * e + 1));
 				wr[s + i] = wrsi.toMonty().get(); wri[s + s - i - 1] = RNS(-wrsi).toMonty().get();
-				const RNSe wrsie = prRoot_me.pow(static_cast<uint32_t>(e));
+				const RNSe wrsie = prRoot_me.pow(static_cast<uint32_t>(a * e + 1));
 				wre[s + i] = wrsie.toMonty().get(); wrie[s + s - i - 1] = RNSe(-wrsie).toMonty().get();
 			}
 		}

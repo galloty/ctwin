@@ -29,8 +29,8 @@ private:
 	cl_kernel _set = nullptr, _copy = nullptr;
 	cl_kernel _square2 = nullptr, _square4 = nullptr, _square8 = nullptr, _square16 = nullptr;
 	cl_kernel _mul2 = nullptr, _mul4 = nullptr;
-	cl_kernel _forward4 = nullptr, _forward16 = nullptr;
-	cl_kernel _backward4 = nullptr, _backward16 = nullptr;
+	cl_kernel _forward4 = nullptr, _forward16 = nullptr, _forward16_0 = nullptr;
+	cl_kernel _backward4 = nullptr, _backward16 = nullptr, _backward16_0 = nullptr;
 	cl_kernel _normalize1 = nullptr, _normalize2 = nullptr;
 
 public:
@@ -135,9 +135,11 @@ public:
 
 		createKernel_forward(_forward4, "forward4");
 		createKernel_forward(_forward16, "forward16");
+		createKernel_forward(_forward16_0, "forward16_0");
 
 		createKernel_backward(_backward4, "backward4");
 		createKernel_backward(_backward16, "backward16");
+		createKernel_backward(_backward16_0, "backward16_0");
 
 		createKernel_normalize(_normalize1, "normalize1");
 		createKernel_normalize(_normalize2, "normalize2");
@@ -153,8 +155,8 @@ public:
 		_releaseKernel(_set); _releaseKernel(_copy);
 		_releaseKernel(_square2); _releaseKernel(_square4); _releaseKernel(_square8); _releaseKernel(_square16);
 		_releaseKernel(_mul2); _releaseKernel(_mul4);
-		_releaseKernel(_forward4); _releaseKernel(_forward16);
-		_releaseKernel(_backward4); _releaseKernel(_backward16);
+		_releaseKernel(_forward4); _releaseKernel(_forward16); _releaseKernel(_forward16_0);
+		_releaseKernel(_backward4); _releaseKernel(_backward16); _releaseKernel(_backward16_0);
 		_releaseKernel(_normalize1); _releaseKernel(_normalize2);
 	}
 
@@ -243,6 +245,13 @@ private:
 		_executeKernel(_forward16, this->_vnsize / 4, VSIZE * 16 / 4);
 	}
 
+	void forward16_0()
+	{
+		const uint32 reg0 = 0;
+		_setKernelArg(_forward16_0, 4, sizeof(uint32), &reg0);
+		_executeKernel(_forward16_0, this->_vnsize / 4, VSIZE * 16 / 4);
+	}
+
 	void backward4(const uint32 s, const int32 lm)
 	{
 		set_sm_args(_backward4, s, lm);
@@ -253,6 +262,11 @@ private:
 	{
 		set_sm_args(_backward16, s, lm);
 		_executeKernel(_backward16, this->_vnsize / 4, VSIZE * 16 / 4);
+	}
+
+	void backward16_0()
+	{
+		_executeKernel(_backward16_0, this->_vnsize / 4, VSIZE * 16 / 4);
 	}
 
 	void forward4mul(const uint32 s, const int32 lm)
@@ -277,6 +291,16 @@ private:
 		_executeKernel(_forward16, this->_vnsize / 4, VSIZE * 16 / 4);
 	}
 
+	void forward16mul_0()
+	{
+		const uint32 reg0 = 0;
+		_setKernelArg(_forward16_0, 4, sizeof(uint32), &reg0);
+		_executeKernel(_forward16_0, this->_vnsize / 4, VSIZE * 16 / 4);
+		const uint32 reg1 = 1;
+		_setKernelArg(_forward16_0, 4, sizeof(uint32), &reg1);
+		_executeKernel(_forward16_0, this->_vnsize / 4, VSIZE * 16 / 4);
+	}
+
 	void normalize1(const uint64 dup)
 	{
 		_setKernelArg(_normalize1, 5, sizeof(uint64), &dup);
@@ -291,25 +315,29 @@ private:
 public:
 	void squareDup(const int32 ln, const uint64 & dup)
 	{
-		uint32 s = 1; int32 lm = ln;
+		forward16_0();
+		uint32 s = 16; int32 lm = ln - 4;
 		for (; lm > 4; s *= 16, lm -= 4) forward16(s, lm - 4);
 		if      (lm == 1) square2();
 		else if (lm == 2) square4();
 		else if (lm == 3) square8();
 		else if (lm == 4) square16();
-		for (s /= 16, lm += 4; s > 0; s /= 16, lm += 4) backward16(s, lm - 4);
+		for (s /= 16, lm += 4; s > 1; s /= 16, lm += 4) backward16(s, lm - 4);
+		backward16_0();
 		normalize1(dup);
 		normalize2();
 	}
 
 	void mul(const int32 ln)
 	{
-		uint32 s = 1; int32 lm = ln;
+		forward16mul_0();
+		uint32 s = 16; int32 lm = ln - 4;
 		for (; lm > 4; s *= 16, lm -= 4) forward16mul(s, lm - 4);
 		if (lm > 2) forward4mul(s, lm - 2);
 		if (lm % 2 != 0) mul2(); else mul4();
 		if (lm > 2) backward4(s, lm - 2);
-		for (s /= 16, lm += 4; s > 0; s /= 16, lm += 4) backward16(s, lm - 4);
+		for (s /= 16, lm += 4; s > 1; s /= 16, lm += 4) backward16(s, lm - 4);
+		backward16_0();
 		normalize1(0);
 		normalize2();
 	}

@@ -292,12 +292,19 @@ public:
 
 		std::array<mpz_t, VSIZE> exponent;
 		int i0 = 0;
+		mpz_t e; mpz_init(e);
 		for (size_t j = 0; j < VSIZE; ++j)
 		{
 			mpz_init(exponent[j]);
+
 			mpz_ui_pow_ui(exponent[j], b[j], 1u << n);
+			// mpz_ui_pow_ui(e, b[j], 1u << (n - 1));	// CYCLO
+			// mpz_mul(exponent[j], e, e);
+			// mpz_sub(exponent[j], exponent[j], e);
+
 			i0 = std::max(i0, int(mpz_sizeinbase(exponent[j], 2) - 1));
 		}
+		mpz_clear(e);
 		const int L = 2 << (ilog2_32(uint32_t(i0)) / 2), B_GL = int((i0 - 1) / L) + 1;
 
 		const std::string ctxFilename = filename + std::string(".ctx");
@@ -436,7 +443,7 @@ public:
 		{
 			if ((i > 0) && (b[i] == b[i - 1])) continue;
 
-			ssr << b[i] << "^" << (1 << n) << " + 1 is ";
+			ssr << b[i] << "^" << (1 << n) << " - " << b[i] << "^" << (1 << (n - 1)) << " + 1 is ";
 			if (isPrime[i])
 			{
 				ssr << "a probable prime";
