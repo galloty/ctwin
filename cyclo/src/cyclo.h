@@ -15,6 +15,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include <thread>
 #include <sys/stat.h>
+#include <vector>
 
 #include <gmp.h>
 
@@ -40,11 +41,11 @@ public:
 protected:
 	volatile bool _quit = false;
 private:
-	bool _isBoinc = false;
 	engine * _engine = nullptr;
 	transform * _transform = nullptr;
 	int _n = 0;
-	int _print_range = 0, _print_i = 0;
+	bool _isBoinc = false;
+	bool _resfile = false;
 
 private:
 	static std::string res64String(const uint64_t res64, const bool uppercase = true)
@@ -70,11 +71,12 @@ private:
 	}
 
 public:
-	void init(const int n, engine & eng, const bool isBoinc)
+	void init(const int n, engine & eng, const bool isBoinc, const bool resfile)
 	{
 		this->_n = n;
 		this->_engine = &eng;
 		this->_isBoinc = isBoinc;
+		this->_resfile = resfile;
 	}
 
 public:
@@ -100,35 +102,10 @@ private:
 	}
 
 private:
-	void initPrintProgress(const int i0, const int i_start)
-	{
-		_print_range = i0; _print_i = i_start;
-		if (_isBoinc) boinc_fraction_done((i0 > i_start) ? static_cast<double>(i0 - i_start) / i0 : 0.0);
-	}
-
-	void printProgress(const double displayTime, const int i)
-	{
-		if (_print_i == i) return;
-
-		const double percent = static_cast<double>(_print_range - i) / _print_range;
-		if (_isBoinc)
-		{
-			boinc_fraction_done(percent);
-		}
-		else
-		{
-			const double mulTime = displayTime / (_print_i - i); _print_i = i;
-			const double estimatedTime = mulTime * i;
-			std::ostringstream ss; ss << std::setprecision(3) << percent * 100.0 << "% done, " << timer::formatTime(estimatedTime)
-									<< " remaining, " << mulTime * 1e3 << " ms/bit.        \r";
-			pio::display(ss.str());
-		}
-	}
-
 	static void clearline() { pio::display("                                                \r"); }
 
 private:
-	int _readContext(const std::string & filename, int & i, double & elapsedTime)
+	int _readContext(const std::string & filename, int & k, int & i, double & elapsedTime)
 	{
 		file contextFile(filename);
 		if (!contextFile.exists()) return -1;
@@ -136,6 +113,7 @@ private:
 		int version = 0;
 		if (!contextFile.read(reinterpret_cast<char *>(&version), sizeof(version))) return -2;
 		if (version != 1) return -2;
+		if (!contextFile.read(reinterpret_cast<char *>(&k), sizeof(k))) return -2;
 		if (!contextFile.read(reinterpret_cast<char *>(&i), sizeof(i))) return -2;
 		if (!contextFile.read(reinterpret_cast<char *>(&elapsedTime), sizeof(elapsedTime))) return -2;
 		if (!_transform->readContext(contextFile)) return -2;
@@ -143,9 +121,9 @@ private:
 		return 0;
 	}
 
-	bool readContext(const std::string & ctxFile, int & i, double & elapsedTime)
+	bool readContext(const std::string & ctxFile, int & k, int & i, double & elapsedTime)
 	{
-		int error = _readContext(ctxFile, i, elapsedTime);
+		int error = _readContext(ctxFile, k, i, elapsedTime);
 		if (error < -1)
 		{
 			std::ostringstream ss; ss << ctxFile << ": invalid context";
@@ -155,7 +133,7 @@ private:
 		const std::string oldCtxFile = ctxFile + ".old";
 		if (error < 0)
 		{
-			error = _readContext(oldCtxFile, i, elapsedTime);
+			error = _readContext(oldCtxFile, k, i, elapsedTime);
 			if (error < -1)
 			{
 				std::ostringstream ss; ss << oldCtxFile << ": invalid context";
@@ -165,7 +143,7 @@ private:
 		return (error == 0);
 	}
 
-	void saveContext(const std::string & ctxFile, const int i, const double elapsedTime) const
+	void saveContext(const std::string & ctxFile, const int k, const int i, const double elapsedTime) const
 	{
 		const std::string oldCtxFile = ctxFile + ".old", newCtxFile = ctxFile + ".new";
 
@@ -173,6 +151,7 @@ private:
 			file contextFile(newCtxFile, "wb", false);
 			int version = 1;
 			if (!contextFile.write(reinterpret_cast<const char *>(&version), sizeof(version))) return;
+			if (!contextFile.write(reinterpret_cast<const char *>(&k), sizeof(k))) return;
 			if (!contextFile.write(reinterpret_cast<const char *>(&i), sizeof(i))) return;
 			if (!contextFile.write(reinterpret_cast<const char *>(&elapsedTime), sizeof(elapsedTime))) return;
 			_transform->saveContext(contextFile);
@@ -209,14 +188,14 @@ private:
 		}
 	}
 
-	void boincMonitor(const std::string & ctxFilename, const int i, watch & chrono)
+	void boincMonitor(const std::string & ctxFilename, const int k, const int i, watch & chrono)
 	{
 		BOINC_STATUS status; boinc_get_status(&status);
 		if (boincQuitRequest(status)) { quit(); return; }
 
 		if (status.suspended != 0)
 		{
-			saveContext(ctxFilename, i, chrono.getElapsedTime());
+			saveContext(ctxFilename, k, i, chrono.getElapsedTime());
 			while (status.suspended != 0)
 			{
 				std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -227,28 +206,34 @@ private:
 
 		if (boinc_time_to_checkpoint() != 0)
 		{
-			saveContext(ctxFilename, i, chrono.getElapsedTime());
+			saveContext(ctxFilename, k, i, chrono.getElapsedTime());
 			boinc_checkpoint_completed();
 		}
 	}
 
 private:
-	static void parseFile(const std::string & filename, vint32 & b)
+	static void parseFile(const std::string & filename, std::vector<vint32> & bvect)
 	{
 		std::ifstream inFile(filename);
 		if (!inFile.is_open()) pio::error("cannot open input file", true);
 
 		size_t i = 0;
 		std::string line;
+		vint32 b;
 		while (std::getline(inFile, line))
 		{
 			b[i] = uint32_t(std::stoi(line));
-			++i; if (i == VSIZE) break;
-		}
-		while (i < VSIZE)
-		{
-			b[i] = b[i - 1];
 			++i;
+			if (i == VSIZE)
+			{
+				bvect.push_back(b);
+				i = 0;
+			}
+		}
+		if (i != 0)
+		{
+			for (; i < VSIZE; ++i) b[i] = b[i - 1];
+			bvect.push_back(b);
 		}
 
 		inFile.close();
@@ -262,33 +247,12 @@ private:
 		return e;
 	}
 
-public:
-	bool check(const std::string & filename, double & elapsedTime)
+private:
+	bool check(const vint32 & b, const std::string & ctxFilename, const int k, const int ri, watch & chrono)
 	{
-		const std::string iniFilename = filename + std::string(".ini");
-		size_t csize = 0;
-		std::ifstream iniFile_i(iniFilename);
-		if (iniFile_i.is_open())
-		{
-			iniFile_i >> csize;
-			iniFile_i.close();
-		}
-
-		createTransform(csize);
-		csize = _transform->get_csize();
-
-		std::ofstream iniFile_o(iniFilename);
-		if (iniFile_o.is_open())
-		{
-			iniFile_o << csize << std::endl;
-			iniFile_o.close();
-		}
-
-		vint32 b; parseFile(filename, b);
-
 		const int n = this->_n;
 		transform * const pTransform = this->_transform;
-		pTransform->init(b);
+		pTransform->set_b(b);
 
 		std::array<mpz_t, VSIZE> exponent;
 		int i0 = 0;
@@ -306,68 +270,45 @@ public:
 		mpz_clear(e);
 		const int L = 2 << (ilog2_32(uint32_t(i0)) / 2), B_GL = int((i0 - 1) / L) + 1;
 
-		const std::string ctxFilename = filename + std::string(".ctx");
-		int ri = 0; double restoredTime = 0;
-		const bool found = readContext(ctxFilename, ri, restoredTime);
+		const int i_start = (ri != 0) ? ri : i0;
 
-		if (!found)
+		for (int i = i_start; i >= 0; --i)
 		{
-			ri = 0; restoredTime = 0;
-			pTransform->set(1);
-			pTransform->copy(1, 0);	// d(t)
-		}
-		else
-		{
-			std::ostringstream ss; ss << "Resuming from a checkpoint." << std::endl;
-			pio::print(ss.str());
-		}
+			if (_isBoinc) boincMonitor(ctxFilename, k, i, chrono);
 
-		watch chrono(found ? restoredTime : 0);
-		const int i_start = found ? ri : i0;
-
-		if (i_start >= 0)
-		{
-			initPrintProgress(i0, i_start);
-
-			for (int i = i_start; i >= 0; --i)
+			if (_quit)
 			{
-				if (_isBoinc) boincMonitor(ctxFilename, i, chrono);
+				saveContext(ctxFilename, k, i, chrono.getElapsedTime());
+				return false;
+			}
 
-				if (_quit)
+			if (i % B_GL == 0)
+			{
+				if ((!_isBoinc) && (chrono.getRecordTime() > 600))
 				{
-					saveContext(ctxFilename, i, chrono.getElapsedTime());
-					clearline();
-					elapsedTime = chrono.getElapsedTime();
-					return false;
-				}
-
-				if (i % B_GL == 0)
-				{
-					chrono.read(); const double displayTime = chrono.getDisplayTime();
-					if (displayTime >= 1) { printProgress(displayTime, i); chrono.resetDisplayTime(); }
-					if (!_isBoinc && (chrono.getRecordTime() > 600)) { saveContext(ctxFilename, i, chrono.getElapsedTime()); chrono.resetRecordTime(); }
-				}
-
-				// if (i == i0 / 2) e = e ^ 1;	// => invalid
-				pTransform->squareDup(get_bitcnt(size_t(i), exponent.data()));
-
-				if ((i % B_GL == 0) && (i / B_GL != 0))
-				{
-					pTransform->copy(2, 0);
-					pTransform->mul();	// d(t)
-					pTransform->copy(1, 0);
-					pTransform->copy(0, 2);
+					saveContext(ctxFilename, k, i, chrono.getElapsedTime());
+					chrono.resetRecordTime();
 				}
 			}
 
-			if (chrono.getElapsedTime() > 60) saveContext(ctxFilename, -1, chrono.getElapsedTime());
+			// if (i == i0 / 2) e = e ^ 1;	// => invalid
+			pTransform->squareDup(get_bitcnt(size_t(i), exponent.data()));
+
+			if ((i % B_GL == 0) && (i / B_GL != 0))
+			{
+				pTransform->copy(2, 0);
+				pTransform->mul();	// d(t)
+				pTransform->copy(1, 0);
+				pTransform->copy(0, 2);
+			}
 		}
+
+		saveContext(ctxFilename, k, -1, chrono.getElapsedTime());
 
 		// get result
 		pTransform->getInt(0);
 
 		// Gerbicz-Li error checking
-		clearline(); pio::display("Validating...\r");
 
 		// d(t + 1) = d(t) * result
 		pTransform->copy(2, 1);
@@ -397,12 +338,7 @@ public:
 		for (int i = i0; i >= B_GL; --i)
 		{
 			if (_isBoinc) boincMonitor();
-			if (_quit)
-			{
-				clearline();
-				elapsedTime = chrono.getElapsedTime();
-				return false;
-			}
+			if (_quit) return false;
 
 			pTransform->squareDup(get_bitcnt(size_t(i), exponent.data()));
 		}
@@ -412,12 +348,7 @@ public:
 		for (int i = B_GL - 1; i >= 0; --i)
 		{
 			if (_isBoinc) boincMonitor();
-			if (_quit)
-			{
-				clearline();
-				elapsedTime = chrono.getElapsedTime();
-				return false;
-			}
+			if (_quit) return false;
 
 			const uint64_t bitcnt = (i <= i0) ? get_bitcnt(size_t(i), exponent.data()) : 0;
 			pTransform->squareDup(bitcnt);
@@ -426,8 +357,8 @@ public:
 		for (size_t j = 0; j < VSIZE; ++j) mpz_clear(exponent[j]);
 
 		std::array<bool, VSIZE> isPrime;
-		std::array<uint64_t, VSIZE> r, r64;
-		const bool err = pTransform->isPrime(isPrime.data(), r.data(), r64.data());
+		std::array<uint64_t, VSIZE> r64;
+		const bool err = pTransform->isPrime(isPrime.data(), r64.data());
 		if (err) pio::error("computation failed", true);
 
 		// d(t)^{2^B} * 2^res ?= d(t + 1)
@@ -437,31 +368,104 @@ public:
 		const bool success = pTransform->GerbiczLiCheck();
 		if (!success) pio::error("Gerbicz failed", true);
 
-		std::ostringstream ssr;
-		for (size_t i = 0; i < VSIZE; ++i)
+		if (_resfile || _isBoinc)
 		{
-			if ((i > 0) && (b[i] == b[i - 1])) continue;
-
-			ssr << b[i] << "^" << (1 << n) << " - " << b[i] << "^" << (1 << (n - 1)) << " + 1 is ";
-			if (isPrime[i])
+			std::ostringstream ss;
+			for (size_t i = 0; i < VSIZE; ++i)
 			{
-				ssr << "a probable prime";
+				if ((i > 0) && (b[i] == b[i - 1])) continue;
+				ss << b[i] << "^" << (1 << n) << " - " << b[i] << "^" << (1 << (n - 1)) << " + 1 is ";
+				if (isPrime[i]) ss << "a probable prime.";
+				else ss << "composite." << " RES64: " << res64String(r64[i]);
+				ss << std::endl;
 			}
-			else
-			{
-				const std::string res = res64String(r[i], false), res64 = res64String(r64[i]);
-				ssr << "composite" << " [RES = " << res << ", RES64 = " << res64 << "]";
-			}
-			ssr << std::endl;
+			pio::result(ss.str());
 		}
 
-		pio::result(ssr.str());
+		if (!_isBoinc)
+		{
+			std::ofstream prpFile("prp.txt", std::ios::app);
+			if (!prpFile.is_open()) pio::error("Cannot write `prp.txt`", true);
+			for (size_t i = 0; i < VSIZE; ++i)
+			{
+				if ((i > 0) && (b[i] == b[i - 1])) continue;
+				if (isPrime[i]) prpFile << b[i] << std::endl;
+			}
+			prpFile.close();
+		}
 
-		ssr << std::endl;
-		clearline();
-		pio::display(ssr.str());
+		return true;
+	}
+
+public:
+	bool check(const std::string & filename, double & elapsedTime)
+	{
+		const std::string iniFilename = filename + std::string(".ini");
+		size_t csize = 0;
+		std::ifstream iniFile_i(iniFilename);
+		if (iniFile_i.is_open())
+		{
+			iniFile_i >> csize;
+			iniFile_i.close();
+		}
+
+		createTransform(csize);
+		csize = _transform->get_csize();
+
+		std::ofstream iniFile_o(iniFilename);
+		if (iniFile_o.is_open())
+		{
+			iniFile_o << csize << std::endl;
+			iniFile_o.close();
+		}
+
+		std::vector<vint32> bvect; parseFile(filename, bvect);
+
+		transform * const pTransform = this->_transform;
+
+		const std::string ctxFilename = filename + std::string(".ctx");
+		int rk = 0, ri = 0; double restoredTime = 0;
+		const bool found = readContext(ctxFilename, rk, ri, restoredTime);
+
+		if (!found)
+		{
+			rk = ri = 0; restoredTime = 0;
+			pTransform->set(1);
+			pTransform->copy(1, 0);	// d(t)
+		}
+		else
+		{
+			std::ostringstream ss; ss << "Resuming from a checkpoint." << std::endl;
+			pio::print(ss.str());
+		}
+
+		watch chrono(restoredTime);
+
+		for (size_t k = size_t(rk), size = bvect.size(); k < size; ++k)
+		{
+			const double percent = k / double(size);
+			if (_isBoinc) boinc_fraction_done(percent);
+			else
+			{
+				elapsedTime = chrono.getElapsedTime();
+				std::ostringstream ss; ss << std::setprecision(3) << percent * 100.0 << "% done, " << timer::formatTime(elapsedTime) << ".        \r\n";
+				pio::display(ss.str());
+			}
+
+			if (!check(bvect[k], ctxFilename, int(k), ri, chrono))
+			{
+				if (!_isBoinc) clearline();
+				elapsedTime = chrono.getElapsedTime();
+				return false;
+			}
+
+			ri = 0;
+			pTransform->set(1);
+			pTransform->copy(1, 0);	// d(t)
+		}
 
 		if (_isBoinc) boinc_fraction_done(1.0);
+		else clearline();
 		elapsedTime = chrono.getElapsedTime();
 		return true;
 	}

@@ -391,7 +391,7 @@ public:
 			{
 				this->_csize = csize;
 				initEngine();
-				init(b);
+				set_b(b);
 				set(1);
 				squareDup(uint64(-1));
 				engine.resetProfiles();
@@ -462,7 +462,7 @@ public:
 
 
 public:
-	void init(const vint32 & b)
+	void set_b(const vint32 & b)
 	{
 		std::array<uint32_2, VSIZE> bb_inv;
 		std::array<int32, VSIZE> bs;
@@ -552,7 +552,7 @@ public:
 	}
 
 public:
-	bool isPrime(bool * const prm, uint64_t * const res, uint64_t * const res64) const
+	bool isPrime(bool * const prm, uint64_t * const res64) const
 	{
 		const size_t n = this->_n;
 		const uint32 * const x = &(this->_x.data()[0 * VSIZE * n]);
@@ -562,13 +562,6 @@ public:
 
 		for (size_t i = 0; i < VSIZE; ++i)
 		{
-			uint64_t r = 0;
-			for (size_t j = 8; j > 0; --j)
-			{
-				r = (r << 8) | uint8_t(x[(n - j) * VSIZE + i]);
-			}
-			res[i] = r;
-
 			prm[i] = (x[i] == 1);
 			err[i] = (x[i] == 0);
 		}

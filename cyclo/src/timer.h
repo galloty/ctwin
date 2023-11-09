@@ -43,24 +43,17 @@ private:
 	const double _elapsedTime;
 	const timer::time _startTime;
 	timer::time _currentTime;
-	timer::time _displayStartTime;
 	timer::time _recordStartTime;
 
 public:
 	watch(const double restoredTime = 0) : _elapsedTime(restoredTime), _startTime(timer::currentTime())
 	{
-		_currentTime = _displayStartTime = _recordStartTime = _startTime;
+		_currentTime = _recordStartTime = _startTime;
 	}
 
 	virtual ~watch() {}
 
-	void read() { _currentTime = timer::currentTime(); }
-
-	double getElapsedTime() { read(); return _elapsedTime + timer::diffTime(_currentTime, _startTime); }
-
-	double getDisplayTime() const { return timer::diffTime(_currentTime, _displayStartTime); }
-	double getRecordTime() const { return timer::diffTime(_currentTime, _recordStartTime); }
-
-	void resetDisplayTime() { _displayStartTime = _currentTime; }
+	double getElapsedTime() { _currentTime = timer::currentTime(); return _elapsedTime + timer::diffTime(_currentTime, _startTime); }
+	double getRecordTime() { _currentTime = timer::currentTime(); return timer::diffTime(_currentTime, _recordStartTime); }
 	void resetRecordTime() { _recordStartTime = _currentTime; }
 };
