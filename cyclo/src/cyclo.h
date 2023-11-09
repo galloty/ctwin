@@ -423,7 +423,7 @@ public:
 
 		transform * const pTransform = this->_transform;
 
-		const std::string ctxFilename = filename + std::string(".ctx");
+		const std::string ctxFilename("cyclo.ctx");
 		int rk = 0, ri = 0; double restoredTime = 0;
 		const bool found = readContext(ctxFilename, rk, ri, restoredTime);
 
@@ -448,7 +448,7 @@ public:
 			else
 			{
 				elapsedTime = chrono.getElapsedTime();
-				std::ostringstream ss; ss << std::setprecision(3) << percent * 100.0 << "% done, " << timer::formatTime(elapsedTime) << ".        \r\n";
+				std::ostringstream ss; ss << std::setprecision(3) << percent * 100.0 << "% done, " << timer::formatTime(elapsedTime) << ".        \r";
 				pio::display(ss.str());
 			}
 
