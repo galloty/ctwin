@@ -329,6 +329,18 @@ private:
 	std::string get_cand_filename() const { return _filename + ".cand"; }
 	std::string get_res_filename() const { return _filename + ".res"; }
 
+	void info() const
+	{
+		static const double C_p[21] = { 0, 2.2415, 4.6432, 8.0257, 7.6388, 6.1913, 6.9476, 10.2327, 10.3762, 14.1587, 14.6623, 14.5833,
+			12.0591, 20.4282, 20.0690, 23.1395, 20.7106, 18.7258, 17.8171, 29.1380, 30.2934 };
+		static const double C_m[21] = { 0, 3.54, 4.43, 4.65, 4.69, 4.66, 4.65, 4.65, 4.65, 4.65, 4.65, 4.65, 4.65, 4.65, 4.65, 4.65, 4.65, 4.65, 4.65, 4.65, 4.65 };
+
+		// #candidates = (e^-gamma)^2 * C_n+ * C_n- * (b_max - b_min) / log(p_max+) / log(p_max-)
+		const size_t size = get_size(), count = get_count();
+		const size_t expected = size_t(0.315236751687193398 * C_p[_n] * C_m[_n] * (_b_max - _b_min) / std::log(_p_min_pos) / std::log(_p_min_neg));
+		std::cout << "Remaining " << count << "/" << size << " candidates (" << count * 100.0 / size << "%), " << expected << " expected." << std::endl;
+	}
+
 	void read()
 	{
 		bool success = false;
@@ -346,9 +358,9 @@ private:
 			}
 			while (std::getline(file, line))
 			{
-				std::istringstream iss(line);
-				uint64_t b; if (!(iss >> b)) continue;
-				_bsieve[b - _b_min] = false;
+				size_t i = 0;
+				try { i = std::stoull(line.c_str()); } catch (...) { success = false; }
+				_bsieve[i] = false;
 			}
 		}
 		file.close();
@@ -358,9 +370,11 @@ private:
 			std::ostringstream ss; ss << "Error reading file '" << get_sieve_filename() << "'.";
 			throw std::runtime_error(ss.str());
 		}
+
+		info();
 	}
 
-	void write() const
+	void write(const bool cand) const
 	{
 		struct stat s;
 		const std::string sieve_filename = get_sieve_filename(), old_filename = sieve_filename + ".old";
@@ -371,18 +385,19 @@ private:
 			throw std::runtime_error(ss.str());
 		}
 
-		const size_t size = get_size(), count = get_count();
 		std::ofstream file(sieve_filename);
 		file << _p_min_pos << " " << _p_min_neg << std::endl;
-		for (uint64_t i = 0; i < size; ++i) if (!_bsieve[i]) file << _b_min + i << std::endl;
+		for (uint64_t i = 0, size = get_size(); i < size; ++i) if (!_bsieve[i]) file << i << std::endl;
 		file.close();
 
-		static const double C_p[21] = { 0, 2.2415, 4.6432, 8.0257, 7.6388, 6.1913, 6.9476, 10.2327, 10.3762, 14.1587, 14.6623, 14.5833,
-			12.0591, 20.4282, 20.0690, 23.1395, 20.7106, 18.7258, 17.8171, 29.1380, 30.2934 };
-		static const double C_m[21] = { 0, 3.54, 4.43, 4.65, 4.69, 4.66, 4.65, 4.65, 4.65, 4.65, 4.65, 4.65, 4.65, 4.65, 4.65, 4.65, 4.65, 4.65, 4.65, 4.65, 4.65 };
-		// #candidates = (e^-gamma)^2 * C_n+ * C_n- * (b_max - b_min) / log(p_max+) / log(p_max-)
-		const size_t expected = size_t(0.315236751687193398 * C_p[_n] * C_m[_n] * (_b_max - _b_min) / std::log(_p_min_pos) / std::log(_p_min_neg));
-		std::cout << "Remaining " << count << "/" << size << " candidates (" << count * 100.0 / size << "%), " << expected << " expected." << std::endl;
+		if (cand)
+		{
+			std::ofstream file(get_cand_filename());
+			for (uint64_t i = 0, size = get_size(); i < size; ++i) if (!_bsieve[i]) file << _b_min + i << std::endl;
+			file.close();
+		}
+
+		info();
 	}
 
 	bool init()
@@ -401,7 +416,7 @@ private:
 			if (std::chrono::duration<double>(now - _record_time).count() > 600)
 			{
 				_record_time = now;
-				write();
+				write(false);
 			}
 		}
 		return !_quit;
@@ -540,7 +555,7 @@ public:
 		if (mode >= 0) check_pos(p_max_pos);
 		if (mode <= 0) check_neg(p_max_neg);
 
-		write();
+		write(true);
 	}
 };
 
@@ -549,7 +564,7 @@ int main(int argc, char * argv[])
 	std::cout << header();
 
 	// int n = 10, mode = 0;
-	// uint64_t b_min = 2, b_max = 1000000;
+	// uint64_t b_min = 2, b_max = 10000;
 
 	if (argc != 5)
 	{
