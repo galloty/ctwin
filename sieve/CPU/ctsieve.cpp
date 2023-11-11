@@ -20,6 +20,30 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include <signal.h>
 #endif
 
+inline int jacobi(const uint64_t x, const uint64_t y)
+{
+	uint64_t m = x, n = y;
+
+	int k = 1;
+	while (m != 0)
+	{
+		// (2/n) = (-1)^((n^2-1)/8)
+		bool odd = false;
+		while (m % 2 == 0) { m /= 2; odd = !odd; }
+		if (odd && (n % 8 != 1) && (n % 8 != 7)) k = -k;
+
+		if (m == 1) return k;	// (1/n) = 1
+
+		// (m/n)(n/m) = -1 iif m == n == 3 (mod 4)
+		if ((m % 4 == 3) && (n % 4 == 3)) k = -k;
+		const uint64_t t = n; n = m; m = t;
+
+		m %= n;	// (m/n) = (m mod n / n)
+	}
+
+	return 0;	// x and y are not coprime
+}
+
 // Modular operations, slow implementation
 class Mod
 {
@@ -199,6 +223,56 @@ public:
 		return r;
 	}
 
+	// If p is prime and (a/p) = 1 return s such that s^2 = (a mod p), otherwise return 0
+	uint64_t sqrt(const uint64_t a) const
+	{
+		if (_p % 4 == 3)
+		{
+			const uint64_t s = pow(a, (_p + 1) / 4);
+			return (mul(s, s) == a) ? s : 0;
+		}
+
+		if (_p % 8 == 5)
+		{
+			const uint64_t b = add(a, a);
+			const uint64_t v = pow(b, (_p - 5) / 8);
+			const uint64_t i = mul(b, mul(v, v));	// i^2 = -1
+			const uint64_t s = mul(mul(a, v), sub(i, _one));
+			return (mul(s, s) == a) ? s : 0;
+		}
+
+		// Tonelli-Shanks algorithm
+
+		// p = q * 2^e + 1, q odd
+		uint64_t q = _p - 1; unsigned int e = 0; while (q % 2 == 0) { q /= 2; ++e; }
+
+		uint64_t z = 2; while (jacobi(z, _p) != -1) ++z;
+		z = pow(toMp(z), q);
+
+		uint64_t y = z;
+		unsigned int r = e;
+		uint64_t x = pow(a, (q - 1) / 2);
+		uint64_t b = mul(a, mul(x, x));
+		x = mul(a, x);
+
+		while (true)
+		{
+			if (b == _one) return x;
+
+			unsigned int m = 1;
+			uint64_t t = b; while (m < r) { t = mul(t, t); if (t == _one) break; ++m; }
+			if (m == r) break;
+
+			t = y; for (size_t i = 0; i < r - m - 1; ++i) t = mul(t, t);
+			y = mul(t, t);
+			r = m;
+			x = mul(x, t);
+			b = mul(b, y);
+		}
+
+		return 0; // n is not prime or (a/n) != 1
+	}
+
 	// 2^(p - 1) ?= 1 mod p
 	bool prp() const
 	{
@@ -214,30 +288,6 @@ public:
 		return ((r == _one) || (r == _p - _one));
 	}
 };
-
-inline int jacobi(const uint64_t x, const uint64_t y)
-{
-	uint64_t m = x, n = y;
-
-	int k = 1;
-	while (m != 0)
-	{
-		// (2/n) = (-1)^((n^2-1)/8)
-		bool odd = false;
-		while (m % 2 == 0) { m /= 2; odd = !odd; }
-		if (odd && (n % 8 != 1) && (n % 8 != 7)) k = -k;
-
-		if (m == 1) return k;	// (1/n) = 1
-
-		// (m/n)(n/m) = -1 iif m == n == 3 (mod 4)
-		if ((m % 4 == 3) && (n % 4 == 3)) k = -k;
-		const uint64_t t = n; n = m; m = t;
-
-		m %= n;	// (m/n) = (m mod n / n)
-	}
-
-	return 0;	// x and y are not coprime
-}
 
 static std::string header()
 {
@@ -441,7 +491,7 @@ private:
 			if ((p % 5 == 0) || (p % 7 == 0) || (p % 11 == 0) || (p % 13 == 0) || (p % 17 == 0)
 			|| (p % 19 == 0) || (p % 23 == 0) || (p % 29 == 0) || (p % 31 == 0)) continue;
 
-			MpArith mp(p);
+			const MpArith mp(p);
 
 			if (mp.prp())
 			{
@@ -463,7 +513,7 @@ private:
 						{
 							if (!_bsieve[s - b_min])
 							{
-								Mod mod(p);
+								const Mod mod(p);
 								const uint64_t x = mod.pow(s, 1 << (n - 1)), r = mod.sub(mod.mul(x, x), x);
 								if (r == p - 1) _bsieve[s - b_min] = true;
 								else // May fail if p is not prime
@@ -507,7 +557,7 @@ private:
 					|| (p % 23 == 0) || (p % 29 == 0) || (p % 31 == 0)) continue;
 				}
 
-				MpArith mp(p);
+				const MpArith mp(p);
 
 				if (mp.prp())
 				{
@@ -519,7 +569,7 @@ private:
 							const uint64_t r = mp.sub(mp.mul(x, x), x);
 							if (r == mp.one())
 							{
-								Mod mod(p);
+								const Mod mod(p);
 								const uint64_t xp = mod.pow(b, 1 << (n - 1)), rp = mod.sub(mod.mul(xp, xp), xp);
 								if (rp != 1) throw std::runtime_error("Calculation error.");
 								_bsieve[b - b_min] = true;
@@ -562,6 +612,33 @@ public:
 int main(int argc, char * argv[])
 {
 	std::cout << header();
+
+	// for (uint64_t k = 1; true; ++k)
+	// {
+	// 	const uint64_t p = 2 * k + 1;
+
+	// 	MpArith mp(p);
+	// 	if (mp.prp())
+	// 	{
+	// 		std::cout << p << "\r";
+	// 		bool warning = true;
+	// 		for (uint64_t a = 1; a < p; ++a)
+	// 		{
+	// 			if (jacobi(a, p) == 1)
+	// 			{
+	// 				const uint64_t ma = mp.toMp(a);
+	// 				const uint64_t s = mp.sqrt(ma);
+	// 				if (mp.mul(s, s) != ma)
+	// 				{
+	// 					if (s != 0)  { std::cout << "Error: s != 0" << std::endl; return 0; }
+	// 					const Mod mod(p);
+	// 					if (mod.isprime()) { std::cout << "Error: p = " << p << ", a = " << a << std::endl; return 0; }
+	// 					else if (warning) { std::cout << "Warning: p = " << p << ", a = " << a << std::endl; warning = false; }
+	// 				}
+	// 			}
+	// 		}
+	// 	}
+	// }
 
 	// int n = 10, mode = 0;
 	// uint64_t b_min = 2, b_max = 10000;
