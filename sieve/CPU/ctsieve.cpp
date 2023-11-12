@@ -194,6 +194,8 @@ public:
 
 	uint64_t one() const { return _one; }
 
+	uint64_t neg(const uint64_t a) const { return (a != 0) ? _p - a : 0; }
+
 	uint64_t add(const uint64_t a, const uint64_t b) const
 	{
 		const uint64_t c = (a >= _p - b) ? _p : 0;
@@ -204,6 +206,11 @@ public:
 	{
 		const uint64_t c = (a < b) ? _p : 0;
 		return a - b + c;
+	}
+
+	uint64_t half(const uint64_t a) const
+	{
+		return (a % 2 == 0) ? a / 2 : a / 2 + _p / 2 + 1;
 	}
 
 	uint64_t mul(const uint64_t a, const uint64_t b) const
@@ -255,7 +262,7 @@ public:
 		uint64_t b = mul(a, mul(x, x));
 		x = mul(a, x);
 
-		while (true)
+		for (size_t j = 0; j < 64; ++j)
 		{
 			if (b == _one) return x;
 
@@ -263,7 +270,7 @@ public:
 			uint64_t t = b; while (m < r) { t = mul(t, t); if (t == _one) break; ++m; }
 			if (m == r) break;
 
-			t = y; for (size_t i = 0; i < r - m - 1; ++i) t = mul(t, t);
+			t = y; for (size_t i = 0; i < r - 1 - m; ++i) t = mul(t, t);
 			y = mul(t, t);
 			r = m;
 			x = mul(x, t);
@@ -489,7 +496,7 @@ private:
 			const uint64_t p = 3 * (k << n) + 1;
 
 			if ((p % 5 == 0) || (p % 7 == 0) || (p % 11 == 0) || (p % 13 == 0) || (p % 17 == 0)
-			|| (p % 19 == 0) || (p % 23 == 0) || (p % 29 == 0) || (p % 31 == 0)) continue;
+			 || (p % 19 == 0) || (p % 23 == 0) || (p % 29 == 0) || (p % 31 == 0)) continue;
 
 			const MpArith mp(p);
 
@@ -554,25 +561,64 @@ private:
 				if (p > 31)
 				{
 					if ((p % 11 == 0) || (p % 13 == 0) || (p % 17 == 0)	|| (p % 19 == 0)
-					|| (p % 23 == 0) || (p % 29 == 0) || (p % 31 == 0)) continue;
+					 || (p % 23 == 0) || (p % 29 == 0) || (p % 31 == 0)) continue;
 				}
 
 				const MpArith mp(p);
 
-				if (mp.prp())
+				if (mp.prp() && (p != 1093*1093) && (p != 3511*3511))
 				{
-					for (uint64_t b = b_min; b <= b_max; ++b)
+					// std::cout << p << "\r";
+
+					std::vector<uint64_t> L;
+					const uint64_t s5 = mp.sqrt(mp.toMp(5));
+					if (s5 == 0)
 					{
-						if (!_bsieve[b - b_min])
+						if (Mod(p).isprime()) throw std::runtime_error("Calculation error.");
+					}
+					else
+					{
+						L.push_back(mp.toInt(mp.half(mp.sub(mp.one(), s5))));
+						L.push_back(mp.toInt(mp.half(mp.add(mp.one(), s5)))); 
+						for (int j = 2; j <= n; ++j)
 						{
-							const uint64_t x = mp.pow(mp.toMp(b), 1 << (n - 1));
-							const uint64_t r = mp.sub(mp.mul(x, x), x);
-							if (r == mp.one())
+							std::vector<uint64_t> Lnew;
+							for (const uint64_t & s : L)
 							{
-								const Mod mod(p);
-								const uint64_t xp = mod.pow(b, 1 << (n - 1)), rp = mod.sub(mod.mul(xp, xp), xp);
-								if (rp != 1) throw std::runtime_error("Calculation error.");
-								_bsieve[b - b_min] = true;
+								if (jacobi(s, p) == 1)
+								{
+									const uint64_t r = mp.toInt(mp.sqrt(mp.toMp(s)));
+									if (r == 0)
+									{
+										if (Mod(p).isprime()) throw std::runtime_error("Calculation error.");
+									}
+									else
+									{
+										Lnew.push_back(r);
+										Lnew.push_back(p - r);
+									}
+								}
+							}
+							L = Lnew;
+						}
+
+						for (const uint64_t & b : L)
+						{
+							for (uint64_t s = b; s <= b_max; s += p)
+							{
+								if (s >= b_min)
+								{
+									if (!_bsieve[s - b_min])
+									{
+										const Mod mod(p);
+										const uint64_t x = mod.pow(s, 1 << (n - 1)), r = mod.sub(mod.mul(x, x), x);
+										if (r == 1) _bsieve[s - b_min] = true;
+										else
+										{
+											if (mod.isprime()) throw std::runtime_error("Calculation error.");
+										}
+									}
+								}
 							}
 						}
 					}
@@ -597,7 +643,7 @@ public:
 		else
 		{
 			_p_min_pos = 3 * (1ull << _n) + 1; _p_min_neg = 11;
-			p_max_pos = 3 * (100000000ull << _n) + 1; p_max_neg = 100001ull;
+			p_max_pos = 3 * (100000000ull << _n) + 1; p_max_neg = 1000000001ull;
 		}
 
 		std::cout << "ctwin-" << _n << ": b in [" << _b_min << ", " << _b_max << "]." << std::endl;
@@ -612,33 +658,6 @@ public:
 int main(int argc, char * argv[])
 {
 	std::cout << header();
-
-	// for (uint64_t k = 1; true; ++k)
-	// {
-	// 	const uint64_t p = 2 * k + 1;
-
-	// 	MpArith mp(p);
-	// 	if (mp.prp())
-	// 	{
-	// 		std::cout << p << "\r";
-	// 		bool warning = true;
-	// 		for (uint64_t a = 1; a < p; ++a)
-	// 		{
-	// 			if (jacobi(a, p) == 1)
-	// 			{
-	// 				const uint64_t ma = mp.toMp(a);
-	// 				const uint64_t s = mp.sqrt(ma);
-	// 				if (mp.mul(s, s) != ma)
-	// 				{
-	// 					if (s != 0)  { std::cout << "Error: s != 0" << std::endl; return 0; }
-	// 					const Mod mod(p);
-	// 					if (mod.isprime()) { std::cout << "Error: p = " << p << ", a = " << a << std::endl; return 0; }
-	// 					else if (warning) { std::cout << "Warning: p = " << p << ", a = " << a << std::endl; warning = false; }
-	// 				}
-	// 			}
-	// 		}
-	// 	}
-	// }
 
 	// int n = 10, mode = 0;
 	// uint64_t b_min = 2, b_max = 10000;
