@@ -177,6 +177,12 @@ private:
 		return (t_hi < mp) ? r + _p : r;
 	}
 
+	uint64_t REDCshort(const uint64_t t) const
+	{
+		const uint64_t mp = mul_hi(t * _q, _p);
+		return (mp != 0) ? _p - mp : 0;
+	}
+
 	// Montgomery form of 2^64 is (2^64)^2
 	uint64_t two_pow_64() const
 	{
@@ -190,7 +196,7 @@ public:
 	MpArith(const uint64_t p) : _p(p), _q(invert(p)), _one((-p) % p), _r2(two_pow_64()) { }
 
 	uint64_t toMp(const uint64_t n) const { return mul(n, _r2); }
-	uint64_t toInt(const uint64_t r) const { return REDC(r); }
+	uint64_t toInt(const uint64_t r) const { return REDCshort(r); }
 
 	uint64_t one() const { return _one; }
 
@@ -233,19 +239,16 @@ public:
 	// If p is prime and (a/p) = 1 return s such that s^2 = (a mod p), otherwise return 0
 	uint64_t sqrt(const uint64_t a) const
 	{
-		if (_p % 4 == 3)
-		{
-			const uint64_t s = pow(a, (_p + 1) / 4);
-			return (mul(s, s) == a) ? s : 0;
-		}
+		if ((a == 0) || (a == _one)) return a;
+
+		if (_p % 4 == 3) return pow(a, (_p + 1) / 4);
 
 		if (_p % 8 == 5)
 		{
 			const uint64_t b = add(a, a);
 			const uint64_t v = pow(b, (_p - 5) / 8);
 			const uint64_t i = mul(b, mul(v, v));	// i^2 = -1
-			const uint64_t s = mul(mul(a, v), sub(i, _one));
-			return (mul(s, s) == a) ? s : 0;
+			return mul(mul(a, v), sub(i, _one));
 		}
 
 		// Tonelli-Shanks algorithm
@@ -278,6 +281,21 @@ public:
 		}
 
 		return 0; // n is not prime or (a/n) != 1
+	}
+
+	uint64_t sqrt_checked(const uint64_t a) const
+	{
+		const uint64_t s = sqrt(a);
+		if (mul(s, s) != a)
+		{
+			if (Mod(_p).isprime())
+			{
+				std::ostringstream ss; ss << "Calculation error: p = " << _p << ", a = " << toInt(a) << std::endl;
+				throw std::runtime_error(ss.str());
+			}
+			return 0;
+		}
+		return s;
 	}
 
 	// 2^(p - 1) ?= 1 mod p
@@ -323,7 +341,7 @@ static std::string header()
 #endif
 
 	std::ostringstream ss;
-	ss << "ctsieve 0.1.0 " << sysver << ssc.str() << std::endl;
+	ss << "ctsieve 0.2.0 " << sysver << ssc.str() << std::endl;
 	ss << "Copyright (c) 2023, Yves Gallot" << std::endl;
 	ss << "ctwin is free source code, under the MIT license." << std::endl << std::endl;
 	return ss.str();
@@ -390,8 +408,8 @@ private:
 	{
 		static const double C_p[21] = { 0, 2.2415, 4.6432, 8.0257, 7.6388, 6.1913, 6.9476, 10.2327, 10.3762, 14.1587, 14.6623, 14.5833,
 			12.0591, 20.4282, 20.0690, 23.1395, 20.7106, 18.7258, 17.8171, 29.1380, 30.2934 };
-		static const double C_m[21] = { 0, 3.54, 4.43, 4.65, 4.69, 4.66, 4.65, 4.65, 4.65, 4.65, 4.65, 4.65, 4.65, 4.65, 4.65, 4.65, 4.65, 4.65, 4.65, 4.65, 4.65 };
-
+		static const double C_m[21] = { 0, 3.5511, 4.4389, 4.6578, 4.6940, 4.6599, 4.6506, 4.6435, 4.6534, 4.6499, 4.6478, 4.6479,
+			4.648, 4.648, 4.648, 4.648, 4.648, 4.648, 4.648, 4.648, 4.648 };
 		// #candidates = (e^-gamma)^2 * C_n+ * C_n- * (b_max - b_min) / log(p_max+) / log(p_max-)
 		const size_t size = get_size(), count = get_count();
 		const size_t expected = size_t(0.315236751687193398 * C_p[_n] * C_m[_n] * (_b_max - _b_min) / std::log(_p_min_pos) / std::log(_p_min_neg));
@@ -523,10 +541,8 @@ private:
 								const Mod mod(p);
 								const uint64_t x = mod.pow(s, 1 << (n - 1)), r = mod.sub(mod.mul(x, x), x);
 								if (r == p - 1) _bsieve[s - b_min] = true;
-								else // May fail if p is not prime
-								{
-									if (mod.isprime()) throw std::runtime_error("Calculation error.");
-								}
+								// May fail if p is not prime
+								else if (mod.isprime()) throw std::runtime_error("Calculation error.");
 							}
 						}
 					}
@@ -571,53 +587,62 @@ private:
 					// std::cout << p << "\r";
 
 					std::vector<uint64_t> L;
-					const uint64_t s5 = mp.sqrt(mp.toMp(5));
-					if (s5 == 0)
-					{
-						if (Mod(p).isprime()) throw std::runtime_error("Calculation error.");
-					}
-					else
-					{
-						L.push_back(mp.toInt(mp.half(mp.sub(mp.one(), s5))));
-						L.push_back(mp.toInt(mp.half(mp.add(mp.one(), s5)))); 
-						for (int j = 2; j <= n; ++j)
-						{
-							std::vector<uint64_t> Lnew;
-							for (const uint64_t & s : L)
-							{
-								if (jacobi(s, p) == 1)
-								{
-									const uint64_t r = mp.toInt(mp.sqrt(mp.toMp(s)));
-									if (r == 0)
-									{
-										if (Mod(p).isprime()) throw std::runtime_error("Calculation error.");
-									}
-									else
-									{
-										Lnew.push_back(r);
-										Lnew.push_back(p - r);
-									}
-								}
-							}
-							L = Lnew;
-						}
 
-						for (const uint64_t & b : L)
+					const uint64_t s5 = mp.sqrt_checked(mp.toMp(5));
+					if (s5 != 0)
+					{
+						if (p % 4 == 3)
 						{
-							for (uint64_t s = b; s <= b_max; s += p)
+							uint64_t r = mp.half(mp.sub(mp.one(), s5));
+							if (jacobi(mp.toInt(r), p) != 1) r = mp.sub(mp.one(), r);
+							for (int j = 2; j < n; ++j)
 							{
-								if (s >= b_min)
+								r = mp.sqrt_checked(r);
+								if (r == 0) break;
+								if (jacobi(mp.toInt(r), p) != 1) r = mp.neg(r);
+							}
+							r = mp.toInt(mp.sqrt_checked(r));
+							if (r != 0) { L.push_back(r); L.push_back(p - r); }
+						}
+						else
+						{
+							const uint64_t r = mp.half(mp.sub(mp.one(), s5));
+							if (jacobi(mp.toInt(r), p) == 1)
+							{
+								L.push_back(r); L.push_back(mp.sub(mp.one(), r));
+								for (int j = 2; j < n; ++j)
 								{
-									if (!_bsieve[s - b_min])
+									std::vector<uint64_t> Lnew;
+									for (const uint64_t & s : L)
 									{
-										const Mod mod(p);
-										const uint64_t x = mod.pow(s, 1 << (n - 1)), r = mod.sub(mod.mul(x, x), x);
-										if (r == 1) _bsieve[s - b_min] = true;
-										else
-										{
-											if (mod.isprime()) throw std::runtime_error("Calculation error.");
-										}
+										const uint64_t r = mp.sqrt_checked(s);
+										if ((r != 0) && (jacobi(mp.toInt(r), p) == 1)) { Lnew.push_back(r); Lnew.push_back(p - r); }
 									}
+									L = Lnew;
+								}
+								std::vector<uint64_t> Lnew;
+								for (const uint64_t & s : L)
+								{
+									const uint64_t r = mp.toInt(mp.sqrt_checked(s));
+									if (r != 0) { Lnew.push_back(r); Lnew.push_back(p - r); }
+								}
+								L = Lnew;
+							}
+						}
+					}
+
+					for (const uint64_t & b : L)
+					{
+						for (uint64_t s = b; s <= b_max; s += p)
+						{
+							if (s >= b_min)
+							{
+								if (!_bsieve[s - b_min])
+								{
+									const Mod mod(p);
+									const uint64_t x = mod.pow(s, 1 << (n - 1)), r = mod.sub(mod.mul(x, x), x);
+									if (r == 1) _bsieve[s - b_min] = true;
+									else if (mod.isprime()) throw std::runtime_error("Calculation error.");
 								}
 							}
 						}
@@ -660,7 +685,7 @@ int main(int argc, char * argv[])
 	std::cout << header();
 
 	// int n = 10, mode = 0;
-	// uint64_t b_min = 2, b_max = 10000;
+	// uint64_t b_min = 2, b_max = 10000000;
 
 	if (argc != 5)
 	{
