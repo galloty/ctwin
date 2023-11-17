@@ -290,12 +290,44 @@ public:
 		{
 			if (Mod(_p).isprime())
 			{
-				std::ostringstream ss; ss << "Calculation error: p = " << _p << ", a = " << toInt(a) << std::endl;
+				std::ostringstream ss; ss << "Calculation error (sqrt): p = " << _p << ", a = " << toInt(a) << ".";
 				throw std::runtime_error(ss.str());
 			}
 			return 0;
 		}
 		return s;
+	}
+
+	void sqrtn(const uint64_t a, const int n, std::vector<uint64_t> & L) const
+	{
+		int e = 0; uint64_t q = _p - 1; do { q /= 2; e++; } while (q % 2 == 0);
+		e = std::min(e, n);
+		if (pow(a, (_p - 1) >> e) != _one) return;
+
+		L.push_back(a);
+		for (int i = 1; i < n; ++i)
+		{
+			std::vector<uint64_t> Lnew;
+			for (const uint64_t & s : L)
+			{
+				const uint64_t r = sqrt_checked(s);
+				if ((r != 0) && (jacobi(toInt(r), _p) == 1)) { Lnew.push_back(r); Lnew.push_back(_p - r); }
+			}
+			L.swap(Lnew);
+		}
+		std::vector<uint64_t> Lnew;
+		for (const uint64_t & s : L)
+		{
+			const uint64_t r = toInt(sqrt_checked(s));
+			if (r != 0) { Lnew.push_back(r); Lnew.push_back(_p - r); }
+		}
+		L.swap(Lnew);
+
+		if ((L.size() != (size_t(1) << e)) && Mod(_p).isprime())
+		{
+			std::ostringstream ss; ss << "Calculation error (sqrtn): p = " << _p << ", a = " << toInt(a) << ", n = " << n << ".";
+			throw std::runtime_error(ss.str());
+		}
 	}
 
 	// 2^(p - 1) ?= 1 mod p
@@ -341,7 +373,7 @@ static std::string header()
 #endif
 
 	std::ostringstream ss;
-	ss << "ctsieve 0.2.0 " << sysver << ssc.str() << std::endl;
+	ss << "ctsieve 0.3.0 " << sysver << ssc.str() << std::endl;
 	ss << "Copyright (c) 2023, Yves Gallot" << std::endl;
 	ss << "ctwin is free source code, under the MIT license." << std::endl << std::endl;
 	return ss.str();
@@ -386,7 +418,7 @@ public:
 		std::stringstream ss; ss << "ctsieve_" << n << "_" << b_min << "_" << b_max;
 		_filename = ss.str();
 
-#if defined(_WIN32)	
+#if defined(_WIN32)
 		SetConsoleCtrlHandler(HandlerRoutine, TRUE);
 #else
 		signal(SIGTERM, quit);
@@ -542,7 +574,11 @@ private:
 								const uint64_t x = mod.pow(s, 1 << (n - 1)), r = mod.sub(mod.mul(x, x), x);
 								if (r == p - 1) _bsieve[s - b_min] = true;
 								// May fail if p is not prime
-								else if (mod.isprime()) throw std::runtime_error("Calculation error.");
+								else if (mod.isprime())
+								{
+									std::ostringstream ss; ss << "Calculation error (check_pos): p = " << p << ", b = " << s << ".";
+									throw std::runtime_error(ss.str());
+								}
 							}
 						}
 					}
@@ -609,24 +645,9 @@ private:
 							const uint64_t r = mp.half(mp.sub(mp.one(), s5));
 							if (jacobi(mp.toInt(r), p) == 1)
 							{
-								L.push_back(r); L.push_back(mp.sub(mp.one(), r));
-								for (int j = 2; j < n; ++j)
-								{
-									std::vector<uint64_t> Lnew;
-									for (const uint64_t & s : L)
-									{
-										const uint64_t r = mp.sqrt_checked(s);
-										if ((r != 0) && (jacobi(mp.toInt(r), p) == 1)) { Lnew.push_back(r); Lnew.push_back(p - r); }
-									}
-									L = Lnew;
-								}
-								std::vector<uint64_t> Lnew;
-								for (const uint64_t & s : L)
-								{
-									const uint64_t r = mp.toInt(mp.sqrt_checked(s));
-									if (r != 0) { Lnew.push_back(r); Lnew.push_back(p - r); }
-								}
-								L = Lnew;
+								std::vector<uint64_t> L1; mp.sqrtn(r, n - 1, L1);
+								std::vector<uint64_t> L2; mp.sqrtn(mp.sub(mp.one(), r), n - 1, L2);
+								L.reserve(L1.size() + L2.size()); L.insert(L.end(), L1.begin(), L1.end()); L.insert(L.end(), L2.begin(), L2.end());
 							}
 						}
 					}
@@ -642,7 +663,11 @@ private:
 									const Mod mod(p);
 									const uint64_t x = mod.pow(s, 1 << (n - 1)), r = mod.sub(mod.mul(x, x), x);
 									if (r == 1) _bsieve[s - b_min] = true;
-									else if (mod.isprime()) throw std::runtime_error("Calculation error.");
+									else if (mod.isprime())
+									{
+										std::ostringstream ss; ss << "Calculation error (check_neg): p = " << p << ", b = " << s << ".";
+										throw std::runtime_error(ss.str());
+									}
 								}
 							}
 						}
