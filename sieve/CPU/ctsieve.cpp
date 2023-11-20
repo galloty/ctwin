@@ -199,6 +199,10 @@ public:
 	uint64_t toInt(const uint64_t r) const { return REDCshort(r); }
 
 	uint64_t one() const { return _one; }
+	uint64_t two() const { return add(_one, _one); }
+	uint64_t three() const { return add(two(), _one); }
+	uint64_t four() const { const uint64_t t = two(); return add(t, t); }
+	uint64_t five() const { return add(four(), _one); }
 
 	uint64_t neg(const uint64_t a) const { return (a != 0) ? _p - a : 0; }
 
@@ -300,6 +304,73 @@ public:
 
 	void sqrtn(const uint64_t a, const int n, std::vector<uint64_t> & L) const
 	{
+		// (a/p) = 1 here
+		// if (jacobi(toInt(a), _p) != 1) return;
+
+		int e = 1; for (uint64_t q = (_p - 1) / 2; q % 2 == 0; q /= 2) e++;
+		e = std::min(e, n);
+		if ((e > 1) && pow(a, (_p - 1) >> e) != _one) return;
+
+		uint64_t r = a, q = (_p - 1) / 2, m = 1;
+		for (int i = 1; i <= n; ++i)
+		{
+			if (q % 2 == 0)
+			{
+				r = sqrt_checked(r);
+				q /= 2;
+			}
+			else
+			{
+				if (m % 2 != 0) m += q;
+				m /= 2;
+			}
+		}
+		if (m > 1) r = pow(r, m);
+
+		if ((r == 0) && Mod(_p).isprime())
+		{
+			std::ostringstream ss; ss << "Calculation error (sqrtn): p = " << _p << ", a = " << toInt(a) << ", n = " << n << ".";
+			throw std::runtime_error(ss.str());
+		}
+
+		// u is a primitive (2^e)th root of unity
+		uint64_t u = 2;
+		while (true)
+		{
+			if (jacobi(u, _p) == -1) break;
+			++u; if ((u == 4) || (u == 9)) ++u;
+		}
+		u = pow(toMp(u), (_p - 1) >> e);
+
+		const size_t s = size_t(1) << e;
+		L.reserve(s);
+		for (size_t i = 0; i < s; i += 2)
+		{
+			const uint64_t b = toInt(r);
+			L.push_back(b); L.push_back(_p - b);
+			r = mul(r, u);
+		}
+	}
+
+	void sqrtn_old(const uint64_t a, const int n, std::vector<uint64_t> & L) const
+	{
+		// (a/p) = 1 here
+		// if (jacobi(toInt(a), _p) != 1) return;
+
+		if (_p % 4 == 3)
+		{
+			uint64_t r = a;
+			for (int i = 1; i < n; ++i)
+			{
+				r = sqrt_checked(r);
+				if (r == 0) break;
+				if (jacobi(toInt(r), _p) != 1) r = _p - r;
+			}
+			r = toInt(sqrt_checked(r));
+			if (r != 0) { L.push_back(r); L.push_back(_p - r); }
+			return;
+		}
+
 		int e = 0; uint64_t q = _p - 1; do { q /= 2; e++; } while (q % 2 == 0);
 		e = std::min(e, n);
 		if (pow(a, (_p - 1) >> e) != _one) return;
@@ -323,10 +394,14 @@ public:
 		}
 		L.swap(Lnew);
 
-		if ((L.size() != (size_t(1) << e)) && Mod(_p).isprime())
+		if (L.size() != (size_t(1) << e))
 		{
-			std::ostringstream ss; ss << "Calculation error (sqrtn): p = " << _p << ", a = " << toInt(a) << ", n = " << n << ".";
-			throw std::runtime_error(ss.str());
+			if (Mod(_p).isprime())
+			{
+				std::ostringstream ss; ss << "Calculation error (sqrtn): p = " << _p << ", a = " << toInt(a) << ", n = " << n << ".";
+				throw std::runtime_error(ss.str());
+			}
+			else { L.clear(); return; }
 		}
 	}
 
@@ -552,13 +627,14 @@ private:
 
 			if (mp.prp())
 			{
-				uint64_t a = 5;
+				uint64_t a = 5, ma = mp.five();
 				while (true)
 				{
-					if ((jacobi(a, p) == -1) && (mp.pow(mp.toMp(a), k << (n - 1)) != p - mp.one())) break;
-					++a; if (a % 3 == 0) ++a;
+					if ((jacobi(a, p) == -1) && (mp.pow(ma, k << (n - 1)) != p - mp.one())) break;
+					++a; ma = mp.add(ma, mp.one());
+					if (a % 3 == 0) { ++a; ma = mp.add(ma, mp.one()); }
 				}
-				const uint64_t c = mp.pow(mp.toMp(a), k), c2 = mp.mul(c, c);
+				const uint64_t c = mp.pow(ma, k), c2 = mp.mul(c, c);
 
 				for (uint64_t i = 1, b = mp.toInt(c); i < (uint64_t(3) << n); i += 2, b = mp.mul(b, c2))
 				{
@@ -579,13 +655,14 @@ private:
 									std::ostringstream ss; ss << "Calculation error (check_pos): p = " << p << ", b = " << s << ".";
 									throw std::runtime_error(ss.str());
 								}
+								else goto next_prime;
 							}
 						}
 					}
 				}
 
+				next_prime:
 				_p_min_pos = p;
-
 				if (!monitor(p)) return;
 			}
 		}
@@ -623,32 +700,38 @@ private:
 					// std::cout << p << "\r";
 
 					std::vector<uint64_t> L;
-
 					const uint64_t s5 = mp.sqrt_checked(mp.toMp(5));
 					if (s5 != 0)
 					{
+						const uint64_t r = mp.half(mp.sub(mp.one(), s5));
 						if (p % 4 == 3)
 						{
-							uint64_t r = mp.half(mp.sub(mp.one(), s5));
-							if (jacobi(mp.toInt(r), p) != 1) r = mp.sub(mp.one(), r);
-							for (int j = 2; j < n; ++j)
-							{
-								r = mp.sqrt_checked(r);
-								if (r == 0) break;
-								if (jacobi(mp.toInt(r), p) != 1) r = mp.neg(r);
-							}
-							r = mp.toInt(mp.sqrt_checked(r));
-							if (r != 0) { L.push_back(r); L.push_back(p - r); }
+							const uint64_t rs = (jacobi(mp.toInt(r), p) != 1) ? mp.sub(mp.one(), r) : r;
+							mp.sqrtn(rs, n - 1, L);
+
+							// std::vector<uint64_t> Lp;
+							// mp.sqrtn_old(rs, n - 1, Lp);
+							// std::sort(L.begin(), L.end());
+							// std::sort(Lp.begin(), Lp.end());
+							// if ((L != Lp) && Mod(p).isprime()) std::cout << "Error: p = " << p << ", a = " << mp.toInt(rs) << ", n = " << n << std::endl;
 						}
-						else
+						else if (jacobi(mp.toInt(r), p) == 1)
 						{
-							const uint64_t r = mp.half(mp.sub(mp.one(), s5));
-							if (jacobi(mp.toInt(r), p) == 1)
-							{
-								std::vector<uint64_t> L1; mp.sqrtn(r, n - 1, L1);
-								std::vector<uint64_t> L2; mp.sqrtn(mp.sub(mp.one(), r), n - 1, L2);
-								L.reserve(L1.size() + L2.size()); L.insert(L.end(), L1.begin(), L1.end()); L.insert(L.end(), L2.begin(), L2.end());
-							}
+							std::vector<uint64_t> L1; mp.sqrtn(r, n - 1, L1);
+							std::vector<uint64_t> L2; mp.sqrtn(mp.sub(mp.one(), r), n - 1, L2);
+							L.reserve(L1.size() + L2.size()); L.insert(L.end(), L1.begin(), L1.end()); L.insert(L.end(), L2.begin(), L2.end());
+
+							// std::vector<uint64_t> L1p;
+							// mp.sqrtn_old(r, n - 1, L1p);
+							// std::sort(L1.begin(), L1.end());
+							// std::sort(L1p.begin(), L1p.end());
+							// if ((L1 != L1p) && Mod(p).isprime()) std::cout << "Error: p = " << p << ", a = " << mp.toInt(r) << ", n = " << n << std::endl;
+
+							// std::vector<uint64_t> L2p;
+							// mp.sqrtn_old(mp.sub(mp.one(), r), n - 1, L2p);
+							// std::sort(L2.begin(), L2.end());
+							// std::sort(L2p.begin(), L2p.end());
+							// if ((L2 != L2p) && Mod(p).isprime()) std::cout << "Error: p = " << p << ", a = " << mp.toInt(mp.sub(mp.one(), r)) << ", n = " << n << std::endl;
 						}
 					}
 
@@ -668,13 +751,14 @@ private:
 										std::ostringstream ss; ss << "Calculation error (check_neg): p = " << p << ", b = " << s << ".";
 										throw std::runtime_error(ss.str());
 									}
+									else goto next_prime;
 								}
 							}
 						}
 					}
 
+					next_prime:
 					_p_min_neg = p;
-
 					if (!monitor(p)) return;
 				}
 			}
