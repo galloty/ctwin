@@ -22,6 +22,24 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 inline int jacobi(const uint64_t x, const uint64_t y)
 {
+	static int jac2[2 * 2] = { 1, -1, -1, 1 };
+	static int jac3[2 * 3] = { 1, 0, -1, -1, 0, 1 };
+	static int jac5[1 * 5] = { 1, -1, 0, -1, 1 };
+	static int jac6[2 * 6] = { 1, 0, 1, -1, 0, -1, -1, 0, -1, 1, 0, 1 };
+	static int jac7[2 * 7] = { 1, 1, -1, 0, 1, -1, -1, -1, -1, 1, 0, -1, 1, 1 };
+	static int jac8[8 / 2] = { 1, -1, -1, 1 };
+	static int jac9[1 * 9] = { 1, 0, 1, 1, 0, 1, 1, 0, 1 };
+
+	const uint64_t y_2 = y / 2;
+	if (x == 2) return jac2[y_2 % (2 * 2)];
+	if (x == 3) return jac3[y_2 % (2 * 3)];
+	if (x == 4) return 1;
+	if (x == 5) return jac5[y_2 % (1 * 5)];
+	if (x == 6) return jac6[y_2 % (2 * 6)];
+	if (x == 7) return jac7[y_2 % (2 * 7)];
+	if (x == 8) return jac8[y_2 % (8 / 2)];
+	if (x == 9) return jac9[y_2 % (1 * 9)];
+
 	uint64_t m = x, n = y;
 
 	int k = 1;
@@ -260,7 +278,8 @@ public:
 		// p = q * 2^e + 1, q odd
 		uint64_t q = _p - 1; unsigned int e = 0; while (q % 2 == 0) { q /= 2; ++e; }
 
-		uint64_t z = 2; while (jacobi(z, _p) != -1) ++z;
+		uint64_t z = 3; while (jacobi(z, _p) != -1) ++z;
+
 		z = pow(toMp(z), q);
 
 		uint64_t y = z;
@@ -318,6 +337,7 @@ public:
 			{
 				r = sqrt_checked(r);
 				q /= 2;
+				if (r == 0) break;
 			}
 			else
 			{
@@ -327,10 +347,14 @@ public:
 		}
 		if (m > 1) r = pow(r, m);
 
-		if ((r == 0) && Mod(_p).isprime())
+		if (r == 0)
 		{
-			std::ostringstream ss; ss << "Calculation error (sqrtn): p = " << _p << ", a = " << toInt(a) << ", n = " << n << ".";
-			throw std::runtime_error(ss.str());
+			if (Mod(_p).isprime())
+			{
+				std::ostringstream ss; ss << "Calculation error (sqrtn): p = " << _p << ", a = " << toInt(a) << ", n = " << n << ".";
+				throw std::runtime_error(ss.str());
+			}
+			return;
 		}
 
 		// u is a primitive (2^e)th root of unity
@@ -349,59 +373,6 @@ public:
 			const uint64_t b = toInt(r);
 			L.push_back(b); L.push_back(_p - b);
 			r = mul(r, u);
-		}
-	}
-
-	void sqrtn_old(const uint64_t a, const int n, std::vector<uint64_t> & L) const
-	{
-		// (a/p) = 1 here
-		// if (jacobi(toInt(a), _p) != 1) return;
-
-		if (_p % 4 == 3)
-		{
-			uint64_t r = a;
-			for (int i = 1; i < n; ++i)
-			{
-				r = sqrt_checked(r);
-				if (r == 0) break;
-				if (jacobi(toInt(r), _p) != 1) r = _p - r;
-			}
-			r = toInt(sqrt_checked(r));
-			if (r != 0) { L.push_back(r); L.push_back(_p - r); }
-			return;
-		}
-
-		int e = 0; uint64_t q = _p - 1; do { q /= 2; e++; } while (q % 2 == 0);
-		e = std::min(e, n);
-		if (pow(a, (_p - 1) >> e) != _one) return;
-
-		L.push_back(a);
-		for (int i = 1; i < n; ++i)
-		{
-			std::vector<uint64_t> Lnew;
-			for (const uint64_t & s : L)
-			{
-				const uint64_t r = sqrt_checked(s);
-				if ((r != 0) && (jacobi(toInt(r), _p) == 1)) { Lnew.push_back(r); Lnew.push_back(_p - r); }
-			}
-			L.swap(Lnew);
-		}
-		std::vector<uint64_t> Lnew;
-		for (const uint64_t & s : L)
-		{
-			const uint64_t r = toInt(sqrt_checked(s));
-			if (r != 0) { Lnew.push_back(r); Lnew.push_back(_p - r); }
-		}
-		L.swap(Lnew);
-
-		if (L.size() != (size_t(1) << e))
-		{
-			if (Mod(_p).isprime())
-			{
-				std::ostringstream ss; ss << "Calculation error (sqrtn): p = " << _p << ", a = " << toInt(a) << ", n = " << n << ".";
-				throw std::runtime_error(ss.str());
-			}
-			else { L.clear(); return; }
 		}
 	}
 
@@ -448,7 +419,7 @@ static std::string header()
 #endif
 
 	std::ostringstream ss;
-	ss << "ctsieve 0.3.0 " << sysver << ssc.str() << std::endl;
+	ss << "ctsieve 0.4.0 " << sysver << ssc.str() << std::endl;
 	ss << "Copyright (c) 2023, Yves Gallot" << std::endl;
 	ss << "ctwin is free source code, under the MIT license." << std::endl << std::endl;
 	return ss.str();
@@ -634,6 +605,7 @@ private:
 					++a; ma = mp.add(ma, mp.one());
 					if (a % 3 == 0) { ++a; ma = mp.add(ma, mp.one()); }
 				}
+
 				const uint64_t c = mp.pow(ma, k), c2 = mp.mul(c, c);
 
 				for (uint64_t i = 1, b = mp.toInt(c); i < (uint64_t(3) << n); i += 2, b = mp.mul(b, c2))
@@ -708,30 +680,12 @@ private:
 						{
 							const uint64_t rs = (jacobi(mp.toInt(r), p) != 1) ? mp.sub(mp.one(), r) : r;
 							mp.sqrtn(rs, n - 1, L);
-
-							// std::vector<uint64_t> Lp;
-							// mp.sqrtn_old(rs, n - 1, Lp);
-							// std::sort(L.begin(), L.end());
-							// std::sort(Lp.begin(), Lp.end());
-							// if ((L != Lp) && Mod(p).isprime()) std::cout << "Error: p = " << p << ", a = " << mp.toInt(rs) << ", n = " << n << std::endl;
 						}
 						else if (jacobi(mp.toInt(r), p) == 1)
 						{
 							std::vector<uint64_t> L1; mp.sqrtn(r, n - 1, L1);
 							std::vector<uint64_t> L2; mp.sqrtn(mp.sub(mp.one(), r), n - 1, L2);
 							L.reserve(L1.size() + L2.size()); L.insert(L.end(), L1.begin(), L1.end()); L.insert(L.end(), L2.begin(), L2.end());
-
-							// std::vector<uint64_t> L1p;
-							// mp.sqrtn_old(r, n - 1, L1p);
-							// std::sort(L1.begin(), L1.end());
-							// std::sort(L1p.begin(), L1p.end());
-							// if ((L1 != L1p) && Mod(p).isprime()) std::cout << "Error: p = " << p << ", a = " << mp.toInt(r) << ", n = " << n << std::endl;
-
-							// std::vector<uint64_t> L2p;
-							// mp.sqrtn_old(mp.sub(mp.one(), r), n - 1, L2p);
-							// std::sort(L2.begin(), L2.end());
-							// std::sort(L2p.begin(), L2p.end());
-							// if ((L2 != L2p) && Mod(p).isprime()) std::cout << "Error: p = " << p << ", a = " << mp.toInt(mp.sub(mp.one(), r)) << ", n = " << n << std::endl;
 						}
 					}
 
