@@ -101,7 +101,7 @@ private:
 #endif
 
 		std::ostringstream ss;
-		ss << "cyclo version 0.1.0 (" << sysver << ssc.str() << ")" << std::endl;
+		ss << "cyclo 23.11.0 (" << sysver << ssc.str() << ")" << std::endl;
 		ss << "Copyright (c) 2023, Yves Gallot" << std::endl;
 		ss << "ctwin is free source code, under the MIT license." << std::endl;
 		if (nl)

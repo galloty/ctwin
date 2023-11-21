@@ -384,14 +384,40 @@ private:
 
 		if (!_isBoinc)
 		{
-			std::ofstream prpFile("prp.txt", std::ios::app);
-			if (!prpFile.is_open()) pio::error("Cannot write `prp.txt`", true);
+			std::ostringstream ssf; ssf << "prp_" << n << ".txt";
+			std::ofstream prpFile(ssf.str(), std::ios::app);
+			if (!prpFile.is_open())
+			{
+				std::ostringstream sse; sse << "Cannot write '" << ssf.str() << "'";
+				pio::error(sse.str(), true);
+			}
 			for (size_t i = 0; i < VSIZE; ++i)
 			{
 				if ((i > 0) && (b[i] == b[i - 1])) continue;
 				if (isPrime[i]) prpFile << b[i] << std::endl;
 			}
 			prpFile.close();
+		}
+
+		if (!_isBoinc)
+		{
+			std::ostringstream ssf; ssf << "checkPRST_" << n << ".cmd";
+			std::ofstream chkFile(ssf.str(), std::ios::app);
+			if (!chkFile.is_open())
+			{
+				std::ostringstream sse; sse << "Cannot write '" << ssf.str() << "'";
+				pio::error(sse.str(), true);
+			}
+			for (size_t i = 0; i < VSIZE; ++i)
+			{
+				if ((i > 0) && (b[i] == b[i - 1])) continue;
+				if (isPrime[i])
+				{
+					const int m = 1 << (n - 1);
+					chkFile << "PRST \"(" << b[i] << "^" << m << "-1)*" << b[i] << "^" << m << "-1\" -fermat a 2" << std::endl;
+				}
+			}
+			chkFile.close();
 		}
 
 		return true;

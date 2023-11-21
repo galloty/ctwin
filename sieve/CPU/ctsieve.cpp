@@ -419,7 +419,7 @@ static std::string header()
 #endif
 
 	std::ostringstream ss;
-	ss << "ctsieve 0.4.0 " << sysver << ssc.str() << std::endl;
+	ss << "ctsieve 23.11.0 " << sysver << ssc.str() << std::endl;
 	ss << "Copyright (c) 2023, Yves Gallot" << std::endl;
 	ss << "ctwin is free source code, under the MIT license." << std::endl << std::endl;
 	return ss.str();
