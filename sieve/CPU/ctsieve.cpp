@@ -461,7 +461,7 @@ public:
 		: _n(n), _b_min(b_min), _b_max(b_max), _bsieve(b_max - b_min + 1, false)
 	{
 		_p_min_pos = _p_min_neg = 0;
-		std::stringstream ss; ss << "ctsieve_" << n << "_" << b_min << "_" << b_max;
+		std::stringstream ss; ss << "_" << n << "_" << b_min << "_" << b_max;
 		_filename = ss.str();
 
 #if defined(_WIN32)
@@ -478,9 +478,8 @@ private:
 	size_t get_size() const { return _bsieve.size(); }
 	size_t get_count() const { size_t count = 0; for (bool b : _bsieve) if (!b) count++; return count; }
 
-	std::string get_sieve_filename() const { return _filename + ".sv"; }
-	std::string get_cand_filename() const { return _filename + ".cand"; }
-	std::string get_res_filename() const { return _filename + ".res"; }
+	std::string get_sieve_filename() const { return "sv" + _filename + ".dat"; }
+	std::string get_cand_filename() const { return "cand" + _filename + ".txt"; }
 
 	void info() const
 	{
@@ -497,23 +496,21 @@ private:
 	void read()
 	{
 		bool success = false;
+		_bsieve.assign(_bsieve.size(), true);
 
-		std::ifstream file(get_sieve_filename());
+		std::ifstream file(get_sieve_filename(), std::ios::binary);
 		if (file.good())
 		{
-			success = true;
-			_bsieve.assign(_bsieve.size(), true);
-			std::string line;
-			if (std::getline(file, line))
+			file.read(reinterpret_cast<char *>(&_p_min_pos), sizeof(_p_min_pos));
+			file.read(reinterpret_cast<char *>(&_p_min_neg), sizeof(_p_min_neg));
+			uint64_t sieve_size;
+			file.read(reinterpret_cast<char *>(&sieve_size), sizeof(sieve_size));
+			std::vector<uint32_t> sieve(sieve_size);
+			file.read(reinterpret_cast<char *>(sieve.data()), sieve.size() * sizeof(uint32_t));
+			if (file)
 			{
-				std::istringstream iss(line);
-				if (!(iss >> _p_min_pos) || !(iss >> _p_min_neg)) success = false;
-			}
-			while (std::getline(file, line))
-			{
-				size_t i = 0;
-				try { i = std::stoull(line.c_str()); } catch (...) { success = false; }
-				_bsieve[i] = false;
+				success = true;
+				for (const uint32_t i : sieve) _bsieve[i] = false;
 			}
 		}
 		file.close();
@@ -538,15 +535,21 @@ private:
 			throw std::runtime_error(ss.str());
 		}
 
-		std::ofstream file(sieve_filename);
-		file << _p_min_pos << " " << _p_min_neg << std::endl;
-		for (uint64_t i = 0, size = get_size(); i < size; ++i) if (!_bsieve[i]) file << i << std::endl;
+		std::vector<uint32_t> sieve;
+		for (size_t i = 0, size = _bsieve.size(); i < size; ++i) if (!_bsieve[i]) sieve.push_back(uint32_t(i));
+
+		std::ofstream file(sieve_filename, std::ios::binary);
+		file.write(reinterpret_cast<const char *>(&_p_min_pos), sizeof(_p_min_pos));
+		file.write(reinterpret_cast<const char *>(&_p_min_neg), sizeof(_p_min_neg));
+		const uint64_t sieve_size = sieve.size();
+		file.write(reinterpret_cast<const char *>(&sieve_size), sizeof(sieve_size));
+		file.write(reinterpret_cast<const char *>(sieve.data()), sieve.size() * sizeof(uint32_t));
 		file.close();
 
 		if (cand)
 		{
 			std::ofstream file(get_cand_filename());
-			for (uint64_t i = 0, size = get_size(); i < size; ++i) if (!_bsieve[i]) file << _b_min + i << std::endl;
+			for (size_t i = 0, size = get_size(); i < size; ++i) if (!_bsieve[i]) file << _b_min + i << std::endl;
 			file.close();
 		}
 
