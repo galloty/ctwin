@@ -1,0 +1,13 @@
+CC = g++ -m64 -std=c++17
+FLAGS = -O3 -Wall -Wextra -Wsign-conversion -ffinite-math-only
+
+BIN_DIR = ../../bin
+SRC_DIR = .
+
+EXEC = $(BIN_DIR)/ctsieve.exe
+SRC = $(SRC_DIR)/ctsieve.cpp
+
+build: $(EXEC)
+
+$(EXEC): $(SRC)
+	$(CC) $^ -static $(FLAGS) -I$(SRC_DIR) -o $@

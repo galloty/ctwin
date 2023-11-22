@@ -506,7 +506,7 @@ private:
 			uint64_t sieve_size;
 			file.read(reinterpret_cast<char *>(&sieve_size), sizeof(sieve_size));
 			std::vector<uint32_t> sieve(sieve_size);
-			file.read(reinterpret_cast<char *>(sieve.data()), sieve.size() * sizeof(uint32_t));
+			file.read(reinterpret_cast<char *>(sieve.data()), static_cast<std::streamsize>(sieve.size() * sizeof(uint32_t)));
 			if (file)
 			{
 				success = true;
@@ -543,7 +543,7 @@ private:
 		file.write(reinterpret_cast<const char *>(&_p_min_neg), sizeof(_p_min_neg));
 		const uint64_t sieve_size = sieve.size();
 		file.write(reinterpret_cast<const char *>(&sieve_size), sizeof(sieve_size));
-		file.write(reinterpret_cast<const char *>(sieve.data()), sieve.size() * sizeof(uint32_t));
+		file.write(reinterpret_cast<const char *>(sieve.data()), static_cast<std::streamsize>(sieve.size() * sizeof(uint32_t)));
 		file.close();
 
 		if (cand)
@@ -569,7 +569,7 @@ private:
 		{
 			_display_time = now;
 			std::cout << p << "\r";
-			if (std::chrono::duration<double>(now - _record_time).count() > 600)
+			if (std::chrono::duration<double>(now - _record_time).count() > 30 * 60)
 			{
 				_record_time = now;
 				write(false);
@@ -657,7 +657,7 @@ private:
 
 		for (uint64_t k = k_min; k <= k_max; ++k)
 		{
-			for (int i = 0; i <= 1; ++i)
+			for (uint64_t i = 0; i <= 1; ++i)
 			{
 				const uint64_t p = 10 * k + 2 * i - 1;
 
