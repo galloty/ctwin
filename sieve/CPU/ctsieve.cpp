@@ -7,6 +7,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include <cstdint>
 #include <iostream>
+#include <iomanip>
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -438,6 +439,17 @@ static std::string usage()
 	return ss.str();
 }
 
+inline std::string uint2string(const uint64_t n)
+{
+	double f = double(n); std::string prefix;
+	if (f >= 1e15) { f *= 1e-15; prefix = "P"; }
+	else if (f >= 1e12) { f *= 1e-12; prefix = "T"; }
+	else if (f >= 1e9) { f *= 1e-9; prefix = "G"; }
+	else if (f >= 1e6) { f *= 1e-6; prefix = "M"; }
+	else return std::to_string(n);
+	return std::to_string(f).substr(0, 5) + prefix;
+}
+
 class Sieve
 {
 private:
@@ -481,7 +493,7 @@ private:
 	std::string get_sieve_filename() const { return "sv" + _filename + ".dat"; }
 	std::string get_cand_filename() const { return "cand" + _filename + ".txt"; }
 
-	void info() const
+	void info(const bool extended) const
 	{
 		static const double C_p[21] = { 0, 2.2415, 4.6432, 8.0257, 7.6388, 6.1913, 6.9476, 10.2327, 10.3762, 14.1587, 14.6623, 14.5833,
 			12.0591, 20.4282, 20.0690, 23.1395, 20.7106, 18.7258, 17.8171, 29.1380, 30.2934 };
@@ -490,7 +502,12 @@ private:
 		// #candidates = (e^-gamma)^2 * C_n+ * C_n- * (b_max - b_min) / log(p_max+) / log(p_max-)
 		const size_t size = get_size(), count = get_count();
 		const size_t expected = size_t(0.315236751687193398 * C_p[_n] * C_m[_n] * (_b_max - _b_min) / std::log(_p_min_pos) / std::log(_p_min_neg));
-		std::cout << "Remaining " << count << "/" << size << " candidates (" << count * 100.0 / size << "%), " << expected << " expected." << std::endl;
+		std::cout << "Remaining " << count << "/" << size << " candidates (" << count * 100.0 / size << "%)." << std::endl;
+		if (extended)
+		{
+			std::cout << "p_+ = " << _p_min_pos << " (" << uint2string(_p_min_pos) << "), p_- = " << _p_min_neg
+				<< " (" << uint2string(_p_min_neg) << "), expected: " << expected * 100.0 / size << "%." << std::endl;
+		}
 	}
 
 	void read()
@@ -521,7 +538,7 @@ private:
 			throw std::runtime_error(ss.str());
 		}
 
-		info();
+		info(true);
 	}
 
 	void write(const bool cand) const
@@ -553,7 +570,7 @@ private:
 			file.close();
 		}
 
-		info();
+		info(cand);
 	}
 
 	bool init()
@@ -568,7 +585,7 @@ private:
 		if (std::chrono::duration<double>(now - _display_time).count() > 1)
 		{
 			_display_time = now;
-			std::cout << p << "\r";
+			std::cout << uint2string(p) << "\r";
 			if (std::chrono::duration<double>(now - _record_time).count() > 30 * 60)
 			{
 				_record_time = now;
@@ -588,7 +605,7 @@ private:
 
 		if (!init()) return;
 
-		std::cout << "+1: for p = " << 3 * (k_min << n) + 1 << " to " << 3 * (k_max << n) + 1 << "." << std::endl;
+		std::cout << "+1: for p = " << uint2string(3 * (k_min << n) + 1) << " to " << uint2string(3 * (k_max << n) + 1) << std::endl;
 
 		for (uint64_t k = k_min; k <= k_max; ++k)
 		{
@@ -653,7 +670,7 @@ private:
 
 		if (!init()) return;
 
-		std::cout << "-1: for p = " << 10 * k_min - 1 << " to " << 10 * k_max + 1 << "." << std::endl;
+		std::cout << "-1: for p = " << uint2string(std::max(10 * k_min - 1, uint64_t(11))) << " to " << uint2string(10 * k_max + 1) << std::endl;
 
 		for (uint64_t k = k_min; k <= k_max; ++k)
 		{
@@ -734,7 +751,7 @@ public:
 		else
 		{
 			_p_min_pos = 3 * (1ull << _n) + 1; _p_min_neg = 11;
-			p_max_pos = 3 * (100000000ull << _n) + 1; p_max_neg = 1000000001ull;
+			p_max_pos = 3 * (100000000ull << _n) + 1; p_max_neg = 10000000001ull;
 		}
 
 		std::cout << "ctwin-" << _n << ": b in [" << _b_min << ", " << _b_max << "]." << std::endl;
@@ -749,6 +766,7 @@ public:
 int main(int argc, char * argv[])
 {
 	std::cout << header();
+	std::cout << std::fixed << std::setprecision(3);
 
 	// int n = 10, mode = 0;
 	// uint64_t b_min = 2, b_max = 10000000;
