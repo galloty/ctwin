@@ -493,6 +493,42 @@ private:
 	std::string get_sieve_filename() const { return "sv" + _filename + ".dat"; }
 	std::string get_cand_filename() const { return "cand" + _filename + ".txt"; }
 
+	// Rosetta Code, CRC-32, C
+	static uint32_t rc_crc32(const uint32_t crc32, const char * const buf, const size_t len)
+	{
+		static uint32_t table[256];
+		static bool have_table = false;
+	
+		// This check is not thread safe; there is no mutex
+		if (!have_table)
+		{
+			// Calculate CRC table
+			for (size_t i = 0; i < 256; ++i)
+			{
+				uint32_t rem = static_cast<uint32_t>(i);  // remainder from polynomial division
+				for (size_t j = 0; j < 8; ++j)
+				{
+					if (rem & 1)
+					{
+						rem >>= 1;
+						rem ^= 0xedb88320;
+					}
+					else rem >>= 1;
+				}
+				table[i] = rem;
+			}
+			have_table = true;
+		}
+
+		uint32_t crc = ~crc32;
+		for (size_t i = 0; i < len; ++i)
+		{
+			const uint8_t octet = static_cast<uint8_t>(buf[i]);  // Cast to unsigned octet
+			crc = (crc >> 8) ^ table[(crc & 0xff) ^ octet];
+		}
+		return ~crc;
+	}
+
 	void info(const bool extended) const
 	{
 		static const double C_p[21] = { 0, 2.2415, 4.6432, 8.0257, 7.6388, 6.1913, 6.9476, 10.2327, 10.3762, 14.1587, 14.6623, 14.5833,
@@ -523,8 +559,18 @@ private:
 			uint64_t sieve_size;
 			file.read(reinterpret_cast<char *>(&sieve_size), sizeof(sieve_size));
 			std::vector<uint32_t> sieve(sieve_size);
-			file.read(reinterpret_cast<char *>(sieve.data()), static_cast<std::streamsize>(sieve.size() * sizeof(uint32_t)));
-			if (file)
+			file.read(reinterpret_cast<char *>(sieve.data()), static_cast<std::streamsize>(sieve_size * sizeof(uint32_t)));
+			uint32_t crc32f = 0;
+			file.read(reinterpret_cast<char *>(&crc32f), sizeof(crc32f));
+
+			uint32_t crc32 = 0;
+			crc32 = rc_crc32(crc32, reinterpret_cast<const char *>(&_p_min_pos), sizeof(_p_min_pos));
+			crc32 = rc_crc32(crc32, reinterpret_cast<const char *>(&_p_min_neg), sizeof(_p_min_neg));
+			crc32 = rc_crc32(crc32, reinterpret_cast<const char *>(&sieve_size), sizeof(sieve_size));
+			crc32 = rc_crc32(crc32, reinterpret_cast<const char *>(sieve.data()), sieve_size * sizeof(uint32_t));
+			crc32 = ~crc32 ^ 0xa23777ac;
+
+			if (file && (crc32 == crc32f))
 			{
 				success = true;
 				for (const uint32_t i : sieve) _bsieve[i] = false;
@@ -554,13 +600,21 @@ private:
 
 		std::vector<uint32_t> sieve;
 		for (size_t i = 0, size = _bsieve.size(); i < size; ++i) if (!_bsieve[i]) sieve.push_back(uint32_t(i));
+		const uint64_t sieve_size = sieve.size();
+
+		uint32_t crc32 = 0;
+		crc32 = rc_crc32(crc32, reinterpret_cast<const char *>(&_p_min_pos), sizeof(_p_min_pos));
+		crc32 = rc_crc32(crc32, reinterpret_cast<const char *>(&_p_min_neg), sizeof(_p_min_neg));
+		crc32 = rc_crc32(crc32, reinterpret_cast<const char *>(&sieve_size), sizeof(sieve_size));
+		crc32 = rc_crc32(crc32, reinterpret_cast<const char *>(sieve.data()), sieve_size * sizeof(uint32_t));
+		crc32 = ~crc32 ^ 0xa23777ac;
 
 		std::ofstream file(sieve_filename, std::ios::binary);
 		file.write(reinterpret_cast<const char *>(&_p_min_pos), sizeof(_p_min_pos));
 		file.write(reinterpret_cast<const char *>(&_p_min_neg), sizeof(_p_min_neg));
-		const uint64_t sieve_size = sieve.size();
 		file.write(reinterpret_cast<const char *>(&sieve_size), sizeof(sieve_size));
 		file.write(reinterpret_cast<const char *>(sieve.data()), static_cast<std::streamsize>(sieve.size() * sizeof(uint32_t)));
+		file.write(reinterpret_cast<const char *>(&crc32), sizeof(crc32));
 		file.close();
 
 		if (cand)
