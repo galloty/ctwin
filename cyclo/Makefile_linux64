@@ -4,7 +4,7 @@ FLAGS = -O3 -Wall -Wextra -Wsign-conversion -ffinite-math-only
 BIN_DIR = ../bin
 SRC_DIR = src
 
-OCL_INC = -IKhronos
+OCL_INC = -I../Khronos
 OCL_LIB = -lOpenCL
 
 EXEC = $(BIN_DIR)/cyclog
