@@ -320,7 +320,7 @@ private:
 		mpz_t res, tmp; mpz_init(res); mpz_init(tmp);
 		for (size_t j = 0; j < VSIZE; ++j)
 		{
-			mpz_init_set_ui(res, 0);
+			mpz_set_ui(res, 0);
 			mpz_t & e = exponent[j];
 			while (mpz_sgn(e) != 0)
 			{
@@ -399,27 +399,6 @@ private:
 			prpFile.close();
 		}
 
-		if (!_isBoinc)
-		{
-			std::ostringstream ssf; ssf << "checkPRST_" << n << ".cmd";
-			std::ofstream chkFile(ssf.str(), std::ios::app);
-			if (!chkFile.is_open())
-			{
-				std::ostringstream sse; sse << "Cannot write '" << ssf.str() << "'";
-				pio::error(sse.str(), true);
-			}
-			for (size_t i = 0; i < VSIZE; ++i)
-			{
-				if ((i > 0) && (b[i] == b[i - 1])) continue;
-				if (isPrime[i])
-				{
-					const int m = 1 << (n - 1);
-					chkFile << "PRST \"(" << b[i] << "^" << m << "-1)*" << b[i] << "^" << m << "-1\" -fermat a 2" << std::endl;
-				}
-			}
-			chkFile.close();
-		}
-
 		return true;
 	}
 
@@ -474,7 +453,8 @@ public:
 			else
 			{
 				elapsedTime = chrono.getElapsedTime();
-				std::ostringstream ss; ss << std::setprecision(3) << percent * 100.0 << "% done, " << timer::formatTime(elapsedTime) << ".        \r";
+				std::ostringstream ss; ss << std::setprecision(3) << percent * 100.0 << "% done, "
+					<< k * VSIZE / std::max(elapsedTime, 1.0) << " cand/sec, " << timer::formatTime(elapsedTime) << ".        \r";
 				pio::display(ss.str());
 			}
 
