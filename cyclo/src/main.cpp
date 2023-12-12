@@ -101,7 +101,7 @@ private:
 #endif
 
 		std::ostringstream ss;
-		ss << "cyclo 23.11.0 (" << sysver << ssc.str() << ")" << std::endl;
+		ss << "cyclo 23.12.0 (" << sysver << ssc.str() << ")" << std::endl;
 		ss << "Copyright (c) 2023, Yves Gallot" << std::endl;
 		ss << "ctwin is free source code, under the MIT license." << std::endl;
 		if (nl)
@@ -125,7 +125,6 @@ private:
 		ss << "Usage: cyclo [options]  options may be specified in any order" << std::endl;
 		ss << "  -n <n>                  exponent (b^{2^n} - b^{2^{n-1}} + 1) " << std::endl;
 		ss << "  -f <filename>           input text file (one b per line)" << std::endl;
-		ss << "  -l                      generate 'result_c.txt' file" << std::endl;
 		ss << "  -d <n> or --device <n>  set device number=<n> (default 0)" << std::endl;
 		ss << "  -v or -V                print the startup banner and immediately exit" << std::endl;
 #if defined(BOINC)
@@ -181,12 +180,11 @@ public:
 		ocl::platform platform;
 		if (platform.displayDevices() == 0) throw std::runtime_error("no OpenCL device");
 
-		if (args.empty()) return;
+		// if (args.empty()) return;
 
 		size_t d = 0;
 		int n = 0;
 		std::string filename;
-		bool resfile = false;
 #if defined(BOINC)
 		bool ext_device = false;
 #endif
@@ -224,10 +222,6 @@ public:
 				ext_device = true;
 #endif
 			}
-			else if (arg.substr(0, 2) == "-l")
-			{
-				resfile = true;
-			}
 		}
 
 		if (n == 0) return;
@@ -252,7 +246,7 @@ public:
 		const size_t eng_d = is_boinc_platform ? 0 : d;
 		engine eng(eng_platform, eng_d, true);
 
-		app.init(n, eng, bBoinc, resfile);
+		app.init(n, eng, bBoinc);
 		double elapsedTime = 0; const bool success = app.check(filename, elapsedTime);
 		app.release();
 

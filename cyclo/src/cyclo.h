@@ -45,7 +45,6 @@ private:
 	transform * _transform = nullptr;
 	int _n = 0;
 	bool _isBoinc = false;
-	bool _resfile = false;
 
 private:
 	static std::string res64String(const uint64_t res64, const bool uppercase = true)
@@ -71,12 +70,11 @@ private:
 	}
 
 public:
-	void init(const int n, engine & eng, const bool isBoinc, const bool resfile)
+	void init(const int n, engine & eng, const bool isBoinc)
 	{
 		this->_n = n;
 		this->_engine = &eng;
 		this->_isBoinc = isBoinc;
-		this->_resfile = resfile;
 	}
 
 public:
@@ -275,20 +273,19 @@ private:
 		for (int i = i_start; i >= 0; --i)
 		{
 			if (_isBoinc) boincMonitor(ctxFilename, k, i, chrono);
+			else if (i % B_GL == 0)
+			{
+				if (chrono.getRecordTime() > 600)
+				{
+					saveContext(ctxFilename, k, i, chrono.getElapsedTime());
+					chrono.resetRecordTime();
+				}
+			}
 
 			if (_quit)
 			{
 				saveContext(ctxFilename, k, i, chrono.getElapsedTime());
 				return false;
-			}
-
-			if (i % B_GL == 0)
-			{
-				if ((!_isBoinc) && (chrono.getRecordTime() > 600))
-				{
-					saveContext(ctxFilename, k, i, chrono.getElapsedTime());
-					chrono.resetRecordTime();
-				}
 			}
 
 			// if (i == i0 / 2) e = e ^ 1;	// => invalid
@@ -303,7 +300,7 @@ private:
 			}
 		}
 
-		saveContext(ctxFilename, k, -1, chrono.getElapsedTime());
+		// saveContext(ctxFilename, k, -1, chrono.getElapsedTime());
 
 		// get result
 		pTransform->getInt(0);
@@ -368,21 +365,21 @@ private:
 		const bool success = pTransform->GerbiczLiCheck();
 		if (!success) pio::error("Gerbicz failed", true);
 
-		if (_resfile || _isBoinc)
+		size_t count = 0;
 		{
 			std::ostringstream ss;
 			for (size_t i = 0; i < VSIZE; ++i)
 			{
 				if ((i > 0) && (b[i] == b[i - 1])) continue;
 				ss << b[i] << "^" << (1 << n) << " - " << b[i] << "^" << (1 << (n - 1)) << " + 1 is ";
-				if (isPrime[i]) ss << "a probable prime.";
-				else ss << "composite." << " RES64: " << res64String(r64[i]);
+				if (isPrime[i]) ss << "a probable prime."; else ss << "composite. RES64: " << res64String(r64[i]);
 				ss << std::endl;
+				if (isPrime[i]) ++count;
 			}
 			pio::result(ss.str());
 		}
 
-		if (!_isBoinc)
+		if (!_isBoinc && (count > 0))
 		{
 			std::ostringstream ssf; ssf << "prp_" << n << ".txt";
 			std::ofstream prpFile(ssf.str(), std::ios::app);

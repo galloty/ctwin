@@ -6,6 +6,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 */
 
 #include <cstdint>
+#include <stdexcept>
 #include <iostream>
 #include <iomanip>
 #include <fstream>
@@ -620,7 +621,7 @@ private:
 		if (cand)
 		{
 			std::ofstream file(get_cand_filename());
-			for (size_t i = 0, size = get_size(); i < size; ++i) if (!_bsieve[i]) file << _b_min + i << std::endl;
+			for (size_t i = 0, size = get_size(); i < size; ++i) if (!_bsieve[i]) file << _b_min + 1 + i << std::endl;
 			file.close();
 		}
 
