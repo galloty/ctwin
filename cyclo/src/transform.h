@@ -549,6 +549,44 @@ public:
 				f[i] = e;
 			}
 		}
+
+		for (size_t i = 0; i < VSIZE; ++i)
+		{
+			bool overflow = true;
+			for (size_t j = n - 1; j >= n / 2; --j)
+			{
+				const size_t k = j * VSIZE + i;
+				if (x[k] != b[i] - 1) { overflow = false; break; }
+			}
+			if (overflow)
+			{
+				overflow = false;
+				for (size_t j = n / 2 - 1; j > 0; --j)
+				{
+					const size_t k = j * VSIZE + i;
+					if (x[k] != 0) { overflow = true; break; }
+				}
+				if (!overflow) overflow = (x[0] != 0);
+			}
+
+			if (overflow)
+			{
+				int32_t carry = 0;
+				for (size_t j = 0; j < n / 2; ++j)
+				{
+					const size_t k = j * VSIZE + i;
+					const int32_t y = (j == 0) ? 1 : 0;
+					const int32_t s = int32_t(x[k]) - y + carry;
+					if (s < 0) { x[k] = uint32(s) + b[i]; carry = -1; } else { x[k] = uint32(s); carry = 0; break; }
+				}
+				if (carry != 0) pio::error("getInt failed", true);
+				for (size_t j = n / 2; j < n; ++j)
+				{
+					const size_t k = j * VSIZE + i;
+					x[k] = 0;
+				}
+			}
+		}
 	}
 
 public:
