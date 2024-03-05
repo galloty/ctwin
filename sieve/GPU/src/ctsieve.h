@@ -144,9 +144,8 @@ public:
 
 protected:
 	volatile bool _quit = false;
-	bool _display = false;
 	size_t _factorSize = 0;
-	uint32_t _n = 0;
+	int _n = 0;
 	size_t _factorsLoop = 0;
 	size_t _savedCount = 0;
 	int _log2GlobalWorkSize = 18;
@@ -161,14 +160,14 @@ private:
 	{
 		std::ifstream clFile(clFileName);
 		if (!clFile.is_open()) return false;
-		
+
 		// if .cl file exists then generate header file
 		std::ofstream hFile(headerFileName, std::ios::binary);	// binary: don't convert line endings to `CRLF` 
 		if (!hFile.is_open()) throw std::runtime_error("cannot write openCL header file");
 
 		hFile << "/*" << std::endl;
-		hFile << "Copyright 2020, Yves Gallot" << std::endl << std::endl;
-		hFile << "gfsieve is free source code, under the MIT license (see LICENSE). You can redistribute, use and/or modify it." << std::endl;
+		hFile << "Copyright 2024, Yves Gallot" << std::endl << std::endl;
+		hFile << "ctwin is free source code, under the MIT license (see LICENSE). You can redistribute, use and/or modify it." << std::endl;
 		hFile << "Please give feedback to the authors if improvement is realized. It is distributed in the hope that it will be useful." << std::endl;
 		hFile << "*/" << std::endl << std::endl;
 
@@ -214,7 +213,8 @@ private:
 		engine.allocMemory(globalWorkSize, _factorSize);
 		engine.createKernels();
 
-		engine.clearCounters();
+		engine.clearPrimeCount();
+		engine.clearFactorCount();
 	}
 
 private:
@@ -257,7 +257,7 @@ private:
 			std::ofstream resFile(resFilename, std::ios::app);
 			if (resFile.is_open())
 			{
-				const uint32_t n = _n, N = uint32_t(1) << n;
+				const int n = _n, N = uint32_t(1) << n;
 				for (size_t i = _savedCount; i < factorCount; ++i)
 				{
 					const cl_ulong2 & f = _factor[i];
@@ -269,7 +269,6 @@ private:
 					{
 						std::ostringstream ss; ss << p << " | " << b << "^" << N << "+1" << std::endl;
 						resFile << ss.str();
-						if (_display) std::cout << ss.str();
 					}
 					else
 					{
@@ -330,7 +329,7 @@ private:
 
 			engine.setProfiling(true);
 			initEngine(engine, log2Global);
-			
+
 			const double f = 1e12 / pow(2.0, double(_n + 1 + log2Global));
 			const uint64_t i = uint64_t(floor(p_min * f));
 
@@ -341,7 +340,7 @@ private:
 				engine.checkPrimes(global, i);
 				engine.initFactors(global);
 				engine.checkFactors(global, N_2_factors_loop, (local == 8) ? 0 : local);
-				engine.clearPrimes();
+				engine.clearPrimeCount();
 				engine.readFactorCount();
 
 				const double time = engine.getProfileTime() / double(global);
@@ -366,12 +365,11 @@ private:
 	}
 
 public:
-	bool check(engine & engine, const uint32_t n, const uint32_t p_min, const uint32_t p_max, const bool display)
+	bool check(engine & engine, const int n, const uint32_t p_min, const uint32_t p_max)
 	{
-		_display = display;
 		_factorSize = (p_min >= 8) ? (size_t(1) << 24) : (size_t(1) << 26);
 		_n = n;
-		_factorsLoop = size_t(1) << std::min(_n - 1, 10u);
+		_factorsLoop = size_t(1) << std::min(_n - 1, 10);
 		_savedCount = 0;
 		std::stringstream ss; ss << n << "_" << p_min << "_" << p_max << ".txt";
 		_extension = ss.str();
@@ -389,12 +387,13 @@ public:
 
 		if (cnt == 0)
 		{
-			const double pTime = autoTuning(engine, p_min);
-			const std::string estimatedTime = timer::formatTime(pTime * (p_max - p_min));
-			std::cout << "Estimated time: " << estimatedTime << std::endl;
+			_log2GlobalWorkSize = 21; _localWorkSize = 0;
+			// const double pTime = autoTuning(engine, p_min);
+			// const std::string estimatedTime = timer::formatTime(pTime * (p_max - p_min));
+			// std::cout << "Estimated time: " << estimatedTime << std::endl;
 		}
 
-		engine.setProfiling(false);
+		// engine.setProfiling(false);
 		initEngine(engine, _log2GlobalWorkSize);
 
 		const double f = 1e12 / pow(2.0, double(n + 1 + _log2GlobalWorkSize));
@@ -417,13 +416,13 @@ public:
 			if (_quit) break;
 
 			engine.checkPrimes(globalWorkSize, i);
-			// const size_t primeCount = engine.readPrimeCount();
-			// std::cout << primeCount << " primes" << std::endl;
+			const size_t primeCount = engine.readPrimeCount();
+			std::cout << primeCount << " primes" << std::endl;
 			engine.initFactors(globalWorkSize);
 			engine.checkFactors(globalWorkSize, N_2_factors_loop, localWorkSize);
-			// const size_t factorCount = engine.readFactorCount();
-			// std::cout << factorCount << " factors" << std::endl;
-			engine.clearPrimes();
+			const size_t factorCount = engine.readFactorCount();
+			std::cout << factorCount << " factors" << std::endl;
+			engine.clearPrimeCount();
 			++cnt;
 
 			const timer::time currentTime = timer::currentTime();

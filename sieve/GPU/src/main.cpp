@@ -112,14 +112,13 @@ public:
 		ocl::platform platform;
 		platform.displayDevices();
 
-		// if (args.size() < 7) return;
+		// if (args.size() < 5) return;
 
 		// parse args
-		const uint32_t n = (args.size() > 0) ? std::atoi(args[0].c_str()) : 14;
-		const uint32_t p_min = (args.size() > 1) ? std::atoi(args[1].c_str()) : 1000;
-		const uint32_t p_max = (args.size() > 2) ? std::atoi(args[2].c_str()) : 1005;
-		size_t d = 0;
-		bool display = false;
+		const int n = (args.size() > 0) ? std::atoi(args[0].c_str()) : 14;
+		const uint32_t p_min = (args.size() > 1) ? uint32_t(std::atoi(args[1].c_str())) : 1000u;
+		const uint32_t p_max = (args.size() > 2) ? uint32_t(std::atoi(args[2].c_str())) : 1005u;
+		int d = 0;
 		for (size_t i = 3, size = args.size(); i < size; ++i)
 		{
 			const std::string & arg = args[i];
@@ -128,10 +127,8 @@ public:
 			{
 				const std::string dev = ((arg == "-d") && (i + 1 < size)) ? args[++i] : arg.substr(2);
 				d = std::atoi(dev.c_str());
-				if (d >= platform.getDeviceCount()) throw std::runtime_error("invalid device number");
+				if (d >= int(platform.getDeviceCount())) throw std::runtime_error("invalid device number");
 			}
-
-			if (arg == "-p") display = true;
 		}
 
 		if ((n < 8) || (n > 24) || (p_min < 1) || (p_max <= p_min))
@@ -142,8 +139,8 @@ public:
 
 		gfsieve & sieve = gfsieve::getInstance();
 
-		engine engine(platform, d);
-		sieve.check(engine, n, p_min, p_max, display);
+		engine engine(platform, size_t(d));
+		sieve.check(engine, n, p_min, p_max);
 	}
 };
 
