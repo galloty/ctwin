@@ -113,11 +113,11 @@ inline bool prp(const uint64 p, const uint64 q, const uint64 one)
 }
 
 __kernel
-void check_primes(__global uint * restrict const prime_count, __global ulong3 * restrict const prime_vector, const ulong i)
+void check_primes(__global uint * restrict const prime_count, __global ulong3 * restrict const prime_vector, const ulong index)
 {
-	const uint64 k = (i << log2GlobalWorkSize) | get_global_id(0);
+	const uint64 k = index | get_global_id(0);
 
-	const uint64 p = (k << (gfn_n + 1)) | 1, q = invert(p), one = (-p) % p;
+	const uint64 p = (k << (g_n + 1)) | 1, q = invert(p), one = (-p) % p;
 	if (prp(p, q, one))
 	{
 		const uint prime_index = atomic_inc(prime_count);
@@ -134,7 +134,7 @@ void init_factors(__global const uint * restrict const prime_count, __global con
 
 	const uint64 p = prime_vector[i].s0, q = prime_vector[i].s1, one = prime_vector[i].s2;
 
-	const uint64 k = p >> (gfn_n + 1);
+	const uint64 k = p >> (g_n + 1);
 
 	uint32 a;
 	if ((p % 3) == 2) { a = 3; }

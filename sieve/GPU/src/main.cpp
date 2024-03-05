@@ -109,7 +109,7 @@ public:
 	{
 		std::cout << header();
 
-		ocl::platform platform;
+		platform platform;
 		platform.displayDevices();
 
 		// if (args.size() < 5) return;

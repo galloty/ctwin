@@ -7,67 +7,60 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #pragma once
 
+#include <chrono>
 #include <string>
 #include <sstream>
 #include <iomanip>
 
-#if defined (_WIN32)	// use Performance Counter
-#include <Windows.h>
-#else					// otherwise use gettimeofday() instead
-#include <sys/time.h>
-#endif
-
 struct timer
 {
-#if defined (_WIN32)
-	typedef LARGE_INTEGER time;
-#else
-	typedef timeval time;
-#endif
+	typedef std::chrono::high_resolution_clock::time_point time;
 
 	static time currentTime()
 	{
-#if defined (_WIN32)
-		LARGE_INTEGER time; QueryPerformanceCounter(&time);
-#else
-		timeval time; gettimeofday(&time, nullptr);
-#endif
-		return time;
+		return std::chrono::high_resolution_clock::now();
 	}
 
 	static double diffTime(const time & end, const time & start)
 	{
-#if defined (_WIN32)
-		LARGE_INTEGER freq; QueryPerformanceFrequency(&freq);
-		return double(end.QuadPart - start.QuadPart) / double(freq.QuadPart);
-#else
-		return double(end.tv_sec - start.tv_sec) + double(end.tv_usec - start.tv_usec) * 1e-6;
-#endif
+		return std::chrono::duration<double>(end - start).count();
 	}
 
 	static std::string formatTime(const double time)
 	{
-		uint64_t seconds = uint64_t(time), minutes = seconds / 60, hours = minutes / 60;
+		uint64_t seconds = static_cast<uint64_t>(time), minutes = seconds / 60, hours = minutes / 60;
 		seconds -= minutes * 60; minutes -= hours * 60;
 
 		std::stringstream ss;
-		ss << std::setfill('0') << std::setw(2) <<  hours << ':' << std::setw(2) << minutes << ':' << std::setw(2) << seconds;
+		ss << std::setfill('0') << std::setw(2) << hours << ':' << std::setw(2) << minutes << ':' << std::setw(2) << seconds;
 		return ss.str();
 	}
 };
 
-struct chronometer
+class watch
 {
-	double previousTime;
-	timer::time startTime;
-	timer::time startBenchTime;
-	timer::time startRecordTime;
+private:
+	const double _elapsedTime;
+	const timer::time _startTime;
+	timer::time _currentTime;
+	timer::time _displayStartTime;
+	timer::time _recordStartTime;
 
-	double getElapsedTime() const { return previousTime + timer::diffTime(timer::currentTime(), startTime); }
-	double getBenchTime() const { return timer::diffTime(timer::currentTime(), startBenchTime); }
-	double getRecordTime() const { return timer::diffTime(timer::currentTime(), startRecordTime); }
+public:
+	watch(const double restoredTime = 0) : _elapsedTime(restoredTime), _startTime(timer::currentTime())
+	{
+		_currentTime = _displayStartTime = _recordStartTime = _startTime;
+	}
 
-	void resetTime() { startTime = timer::currentTime(); }
-	void resetBenchTime() { startBenchTime = timer::currentTime(); }
-	void resetRecordTime() { startRecordTime = timer::currentTime(); }
+	virtual ~watch() {}
+
+	void read() { _currentTime = timer::currentTime(); }
+
+	double getElapsedTime() { read(); return _elapsedTime + timer::diffTime(_currentTime, _startTime); }
+
+	double getDisplayTime() const { return timer::diffTime(_currentTime, _displayStartTime); }
+	double getRecordTime() const { return timer::diffTime(_currentTime, _recordStartTime); }
+
+	void resetDisplayTime() { _displayStartTime = _currentTime; }
+	void resetRecordTime() { _recordStartTime = _currentTime; }
 };

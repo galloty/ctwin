@@ -9,7 +9,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include "ocl.h"
 
-class engine : public ocl::device
+class engine : public device
 {
 private:
 	cl_mem _prime_vector = nullptr, _c_a2k_vector = nullptr, _factor_vector = nullptr;
@@ -17,7 +17,7 @@ private:
 	cl_kernel _check_primes = nullptr, _init_factors = nullptr, _check_factors = nullptr, _clear_primes = nullptr;
 
 public:
-	engine(const ocl::platform & platform, const size_t d) : ocl::device(platform, d) {}
+	engine(const platform & platform, const size_t d) : device(platform, d, true) {}
 	virtual ~engine() {}
 
 public:
@@ -109,5 +109,11 @@ public:
 		{
 			_executeKernel(_check_factors, count, worksize);
 		}
+	}
+
+public:
+	void clearPrimes()
+	{
+		_executeKernel(_clear_primes, 1);
 	}
 };

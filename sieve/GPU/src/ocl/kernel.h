@@ -125,11 +125,11 @@ static const char * const src_ocl_kernel = \
 "}\n" \
 "\n" \
 "__kernel\n" \
-"void check_primes(__global uint * restrict const prime_count, __global ulong3 * restrict const prime_vector, const ulong i)\n" \
+"void check_primes(__global uint * restrict const prime_count, __global ulong3 * restrict const prime_vector, const ulong index)\n" \
 "{\n" \
-"	const uint64 k = (i << log2GlobalWorkSize) | get_global_id(0);\n" \
+"	const uint64 k = index | get_global_id(0);\n" \
 "\n" \
-"	const uint64 p = (k << (gfn_n + 1)) | 1, q = invert(p), one = (-p) % p;\n" \
+"	const uint64 p = (k << (g_n + 1)) | 1, q = invert(p), one = (-p) % p;\n" \
 "	if (prp(p, q, one))\n" \
 "	{\n" \
 "		const uint prime_index = atomic_inc(prime_count);\n" \
@@ -146,7 +146,7 @@ static const char * const src_ocl_kernel = \
 "\n" \
 "	const uint64 p = prime_vector[i].s0, q = prime_vector[i].s1, one = prime_vector[i].s2;\n" \
 "\n" \
-"	const uint64 k = p >> (gfn_n + 1);\n" \
+"	const uint64 k = p >> (g_n + 1);\n" \
 "\n" \
 "	uint32 a;\n" \
 "	if ((p % 3) == 2) { a = 3; }\n" \

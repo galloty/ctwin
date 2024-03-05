@@ -11,8 +11,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 #include "timer.h"
 #include "engine.h"
 
-#include <thread>
-#include <mutex>
+#include <memory>
 #include <cmath>
 
 #include "ocl/kernel.h"
@@ -143,17 +142,13 @@ public:
 	void quit() { _quit = true; }
 
 protected:
+	const size_t _factorSize = size_t(1) << 24;
+	const int _log2GlobalWorkSize = 21;
 	volatile bool _quit = false;
-	size_t _factorSize = 0;
 	int _n = 0;
 	size_t _factorsLoop = 0;
 	size_t _savedCount = 0;
-	int _log2GlobalWorkSize = 18;
-	size_t _localWorkSize = 0;
-	timer::time _startTime;
 	std::string _extension;
-	std::mutex _factor_mutex;
-	std::vector<cl_ulong2> _factor;
 
 private:
 	static bool readOpenCL(const char * const clFileName, const char * const headerFileName, const char * const varName, std::stringstream & src)
@@ -202,8 +197,7 @@ private:
 		const size_t globalWorkSize = size_t(1) << log2Global;
 
 		std::stringstream src;
-		src << "#define\tlog2GlobalWorkSize\t" << log2Global << std::endl;
-		src << "#define\tgfn_n\t" << _n << std::endl;
+		src << "#define\tg_n\t" << _n << std::endl;
 		src << "#define\tfactors_loop\t" << _factorsLoop << std::endl;
 		src << std::endl;
 
@@ -226,148 +220,59 @@ private:
 	}
 
 private:
-	void readFactors(engine & engine)
+	void saveFactors(engine & engine, const double elapsedTime, const uint32_t p_min, const uint32_t p_max)
 	{
 		const size_t factorCount = engine.readFactorCount();
-		const double elapsedTime = timer::diffTime(timer::currentTime(), _startTime);
 
+		if (factorCount == 0) return;
 		if (factorCount >= _factorSize) throw std::runtime_error("factor count is too large");
-
-		const std::lock_guard<std::mutex> lock(_factor_mutex);
 
 		const std::string runtime = timer::formatTime(elapsedTime);
 		std::cout << factorCount << " factors, time = " << runtime << std::endl;
 
-		if (_savedCount != factorCount)
-		{
-			_factor.resize(factorCount);
-			engine.readFactors(_factor.data(), factorCount);
-		}
-	}
+		std::vector<cl_ulong2> factor(factorCount);
+		engine.readFactors(factor.data(), factorCount);
 
-private:
-	void printFactors(const uint32_t p_min, const uint32_t p_max, const uint64_t cnt)
-	{
-		const std::lock_guard<std::mutex> lock(_factor_mutex);
-
-		const size_t factorCount = _factor.size();
-		if (_savedCount != factorCount)
+		const std::string resFilename = std::string("f") + _extension;
+		std::ofstream resFile(resFilename, std::ios::app);
+		if (resFile.is_open())
 		{
-			const std::string resFilename = std::string("gf") + _extension;
-			std::ofstream resFile(resFilename, std::ios::app);
-			if (resFile.is_open())
+			const int n = _n, N = uint32_t(1) << n;
+			for (size_t i = _savedCount; i < factorCount; ++i)
 			{
-				const int n = _n, N = uint32_t(1) << n;
-				for (size_t i = _savedCount; i < factorCount; ++i)
-				{
-					const cl_ulong2 & f = _factor[i];
-					const uint64_t p = f.s[0], b = f.s[1];
-					if ((p < p_min * 1000000000000ull) || (p > p_max * 1000000000000ull)) continue;
+				const cl_ulong2 & f = factor[i];
+				const uint64_t p = f.s[0], b = f.s[1];
+				if ((p < p_min * 1000000000000ull) || (p > p_max * 1000000000000ull)) continue;
 
-					const Mod mod(p);
-					if (mod.pow(b, 1 << n) == p - 1)
+				const Mod mod(p);
+				if (mod.pow(b, 1 << n) == p - 1)
+				{
+					std::ostringstream ss; ss << p << " | " << b << "^" << N << "+1" << std::endl;
+					resFile << ss.str();
+				}
+				else
+				{
+					if (mod.pow(2, p) != 2)
 					{
-						std::ostringstream ss; ss << p << " | " << b << "^" << N << "+1" << std::endl;
-						resFile << ss.str();
+						std::ostringstream ss; ss << p << " is not 2-prp";
+						throw std::runtime_error(ss.str());
 					}
-					else
+					if (mod.isprime())
 					{
-						if (mod.pow(2, p) != 2)
-						{
-							std::ostringstream ss; ss << p << " is not 2-prp";
-							throw std::runtime_error(ss.str());
-						}
-						if (mod.isprime())
-						{
-							std::ostringstream ss; ss << p << " doesn't divide " << b << "^" << N << "+1";
-							throw std::runtime_error(ss.str());
-						}
+						std::ostringstream ss; ss << p << " doesn't divide " << b << "^" << N << "+1";
+						throw std::runtime_error(ss.str());
 					}
 				}
-				resFile.close();
-				_savedCount = factorCount;
-
-				const std::string ctxFilename = std::string("ctx") + _extension;
-				std::ofstream ctxFile(ctxFilename);
-				if (ctxFile.is_open())
-				{
-					ctxFile << cnt << " " << _log2GlobalWorkSize << " " << _localWorkSize << std::endl;
-					ctxFile.close();
-				}
 			}
+			resFile.close();
+
+			engine.clearFactorCount();
 		}
-	}
-
-private:
-	void saveFactors(engine & engine, const uint32_t p_min, const uint32_t p_max, const uint64_t cnt, const bool wait)
-	{
-		readFactors(engine);
-
-		if (wait)
-		{
-			printFactors(p_min, p_max, cnt);
-		}
-		else
-		{
-			std::thread t( [=] { printFactors(p_min, p_max, cnt); } );
-			t.detach();
-		}
-	}
-
-private:
-	double autoTuning(engine & engine, const uint32_t p_min)
-	{
-		std::cout << " auto-tuning...\r";
-
-		const size_t maxWorkGroupSize = engine.getMaxWorkGroupSize();
-		const size_t N_2_factors_loop = (size_t(1) << (_n - 1)) / _factorsLoop;
-
-		double bestTime = 1e100;
-		for (int log2Global = 17; log2Global <= 21; ++log2Global)
-		{
-			const size_t global = size_t(1) << log2Global;
-
-			engine.setProfiling(true);
-			initEngine(engine, log2Global);
-
-			const double f = 1e12 / pow(2.0, double(_n + 1 + log2Global));
-			const uint64_t i = uint64_t(floor(p_min * f));
-
-			for (size_t local = 8; local <= maxWorkGroupSize; local *= 2)
-			{
-				if (_quit) return 0;
-
-				engine.checkPrimes(global, i);
-				engine.initFactors(global);
-				engine.checkFactors(global, N_2_factors_loop, (local == 8) ? 0 : local);
-				engine.clearPrimeCount();
-				engine.readFactorCount();
-
-				const double time = engine.getProfileTime() / double(global);
-				if (time < bestTime)
-				{
-					bestTime = time;
-					_log2GlobalWorkSize = log2Global;
-					_localWorkSize = (local == 8) ? 0 : local;
-				}
-
-				engine.resetProfiles();
-			}
-
-			clearEngine(engine);
-		}
-
-		const double pTime = bestTime / 1e9 * 1e12 / pow(2.0, double(_n + 1));
-		std::ostringstream ss; ss << std::setprecision(3) << 86400 / pTime << " P/day (globalWorkSize = "
-			<< (size_t(1) << _log2GlobalWorkSize) << ", localWorkSize = " << _localWorkSize << ")";
-		std::cout << ss.str() << std::endl;
-		return pTime;
 	}
 
 public:
 	bool check(engine & engine, const int n, const uint32_t p_min, const uint32_t p_max)
 	{
-		_factorSize = (p_min >= 8) ? (size_t(1) << 24) : (size_t(1) << 26);
 		_n = n;
 		_factorsLoop = size_t(1) << std::min(_n - 1, 10);
 		_savedCount = 0;
@@ -376,24 +281,15 @@ public:
 
 		uint64_t cnt = 0;
 		const std::string ctxFilename = std::string("ctx") + _extension;
-		std::ifstream ctxFile(ctxFilename);
-		if (ctxFile.is_open())
 		{
-			ctxFile >> cnt;
-			ctxFile >> _log2GlobalWorkSize;
-			ctxFile >> _localWorkSize;
-			ctxFile.close();
+			std::ifstream ctxFile(ctxFilename);
+			if (ctxFile.is_open())
+			{
+				ctxFile >> cnt;
+				ctxFile.close();
+			}
 		}
 
-		if (cnt == 0)
-		{
-			_log2GlobalWorkSize = 21; _localWorkSize = 0;
-			// const double pTime = autoTuning(engine, p_min);
-			// const std::string estimatedTime = timer::formatTime(pTime * (p_max - p_min));
-			// std::cout << "Estimated time: " << estimatedTime << std::endl;
-		}
-
-		// engine.setProfiling(false);
 		initEngine(engine, _log2GlobalWorkSize);
 
 		const double f = 1e12 / pow(2.0, double(n + 1 + _log2GlobalWorkSize));
@@ -406,45 +302,52 @@ public:
 
 		std::cout << ((cnt != 0) ? "Resuming from a checkpoint, t" : "T") << "esting n = " << _n << " from " << p_min64 << " to " << p_max64 << std::endl;
 
-		_startTime = timer::currentTime();
-		timer::time displayTime = _startTime, recordTime = _startTime;
+		watch chrono(0);
 
-		const size_t globalWorkSize = size_t(1) << _log2GlobalWorkSize, localWorkSize = _localWorkSize;
+		const size_t globalWorkSize = size_t(1) << _log2GlobalWorkSize;
 
 		for (uint64_t i = i_min + cnt; i < i_max; ++i)
 		{
 			if (_quit) break;
 
-			engine.checkPrimes(globalWorkSize, i);
+			engine.checkPrimes(globalWorkSize, i << _log2GlobalWorkSize);
 			const size_t primeCount = engine.readPrimeCount();
 			std::cout << primeCount << " primes" << std::endl;
 			engine.initFactors(globalWorkSize);
-			engine.checkFactors(globalWorkSize, N_2_factors_loop, localWorkSize);
+			engine.checkFactors(globalWorkSize, N_2_factors_loop, 0);
 			const size_t factorCount = engine.readFactorCount();
 			std::cout << factorCount << " factors" << std::endl;
-			engine.clearPrimeCount();
+			engine.clearPrimes();
+
 			++cnt;
 
-			const timer::time currentTime = timer::currentTime();
+			chrono.read();
 
-			if (timer::diffTime(currentTime, displayTime) > 1)
+			if (chrono.getDisplayTime() > 1)
 			{
-				displayTime = currentTime;
+				chrono.resetDisplayTime();
 				std::ostringstream ss; ss << std::setprecision(3) << " " << cnt * 100.0 / (i_max - i_min) << "% done    \r";
 				std::cout << ss.str();
 			}
 
-			if (timer::diffTime(currentTime, recordTime) > 300)
+			if (chrono.getRecordTime() > 5)
 			{
-				recordTime = currentTime;
-				saveFactors(engine, p_min, p_max, cnt, false);
+				chrono.resetRecordTime();
+				saveFactors(engine, chrono.getElapsedTime(), p_min, p_max);
+
+				std::ofstream ctxFile(ctxFilename);
+				if (ctxFile.is_open())
+				{
+					ctxFile << cnt << std::endl;
+					ctxFile.close();
+				}
 			}
 		}
 
 		if (cnt > 0)
 		{
 			std::cout << " terminating...         \r";
-			saveFactors(engine, p_min, p_max, cnt, true);
+			saveFactors(engine, chrono.getElapsedTime(), p_min, p_max);
 		}
 
 		// engine.displayProfiles(1);
