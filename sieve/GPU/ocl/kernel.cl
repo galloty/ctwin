@@ -29,7 +29,7 @@ inline int jacobi(const uint32 x, const uint32 y)
 		m %= n;	// (m/n) = (m mod n / n)
 	}
 
-	return n;	// x and y are not coprime, return their gcd
+	return 0;	// x and y are not coprime
 }
 
 inline int uint64_log2(const uint64 x) { return 63 - clz(x); }
@@ -117,7 +117,7 @@ void check_primes(__global uint * restrict const prime_count, __global ulong3 * 
 {
 	const uint64 k = index | get_global_id(0);
 
-	const uint64 p = (k << (g_n + 1)) | 1, q = invert(p), one = (-p) % p;
+	const uint64 p = 3 * (k << g_n) + 1, q = invert(p), one = (-p) % p;
 	if (prp(p, q, one))
 	{
 		const uint prime_index = atomic_inc(prime_count);
@@ -127,66 +127,95 @@ void check_primes(__global uint * restrict const prime_count, __global ulong3 * 
 
 __kernel
 void init_factors(__global const uint * restrict const prime_count, __global const ulong3 * restrict const prime_vector,
-	__global ulong2 * restrict const c_a2k_vector)
+	__global ulong2 * restrict const ak_a2k_vector)
 {
 	const size_t i = get_global_id(0);
 	if (i >= *prime_count) return;
 
 	const uint64 p = prime_vector[i].s0, q = prime_vector[i].s1, one = prime_vector[i].s2;
 
-	const uint64 k = p >> (g_n + 1);
+	const uint64 k = ((p - 1) / 3) >> g_n;
 
-	uint32 a;
-	if ((p % 3) == 2) { a = 3; }
+	uint32 a = 5;
+	const uint64 two = add_mod(one, one, p);
+	uint64 ma = add_mod(add_mod(two, two, p), one, p);
+
+	const uint32 pmod5 = p % 5;
+	if (((pmod5 == 2) || (pmod5 == 3)) && (pow_mod(ma, k << (g_n - 1), p, q) != p - one)) {}
 	else
 	{
-		const uint32 pmod5 = p % 5;
-		if ((pmod5 == 2) || (pmod5 == 3)) { a = 5; }
+		a += 2; ma = add_mod(ma, two, p);	// 7
+		const uint32 pmod7 = p % 7;
+		if (((pmod7 == 3) || (pmod7 == 5) || (pmod7 == 6)) && (pow_mod(ma, k << (g_n - 1), p, q) != p - one)) {}
 		else
 		{
-			const uint32 pmod7 = p % 7;
-			if ((pmod7 == 3) || (pmod7 == 5) || (pmod7 == 6)) { a = 7; }
-			else
+			a += 2; ma = add_mod(ma, two, p);	// 9
+			a += 2; ma = add_mod(ma, two, p);	// 11
+			while (a < 256)
 			{
-				for (a = 11; a < 256; a += 2)
-				{
-					const uint32 pmoda = p % a;
-					if (jacobi(pmoda, a) == -1) break;
-				}
-				if (a >= 256) return;	// error?
+				const uint32 pmoda = p % a;
+				if ((jacobi(pmoda, a) == -1) && (pow_mod(ma, k << (g_n - 1), p, q) != p - one)) break;
+
+				a += 2; ma = add_mod(ma, two, p);
+				if (a % 3 == 0) { a += 2; ma = add_mod(ma, two, p); }
+			}
+			if (a >= 256)	// error?
+			{
+				ak_a2k_vector[i] = (ulong2)(0, 0);
+				return;
 			}
 		}
 	}
-	uint64 ma = toMp(a, p, q, one);
 
-	const uint64 c = pow_mod(ma, k, p, q);
-	const uint64 a2k = mul_mod(c, c, p, q);
-	c_a2k_vector[i] = (ulong2)(toInt(c, p, q), a2k);
+/*	while (a < 256)
+	{
+		const uint32 pmoda = p % a;
+		if ((jacobi(pmoda, a) == -1) && (pow_mod(ma, k << (g_n - 1), p, q) != p - one)) break;
+
+		// const uint64 t = pow_mod(ma, k << (g_n - 1), p, q);
+		// if ((t != p - one) && (pow_mod(t, 3, p, q) == p - one)) break;
+
+		a += 2; ma = add_mod(ma, two, p);
+		if (a % 3 == 0) { a += 2; ma = add_mod(ma, two, p); }
+	}
+	if (a >= 256)	// error?
+	{
+		ak_a2k_vector[i] = (ulong2)(0, 0);
+		return;
+	}*/
+
+	const uint64 ak = pow_mod(ma, k, p, q);
+	const uint64 a2k = mul_mod(ak, ak, p, q);
+	ak_a2k_vector[i] = (ulong2)(toInt(ak, p, q), a2k);
 }
 
 __kernel
 void check_factors(__global const uint * restrict const prime_count, __global const ulong3 * restrict const prime_vector,
-	__global const ulong2 * restrict const c_a2k_vector, __global uint * restrict const factor_count, __global ulong2 * restrict const factor)
+	__global const ulong2 * restrict const ak_a2k_vector, __global uint * restrict const factor_count, __global ulong2 * restrict const factor)
 {
 	const size_t i = get_global_id(0);
 	if (i >= *prime_count) return;
 
 	const uint64 p = prime_vector[i].s0, q = prime_vector[i].s1;
-	uint64 c = c_a2k_vector[i].s0;
-	const uint64 a2k = c_a2k_vector[i].s1;
+	uint64 b = ak_a2k_vector[i].s0;
+	if (b == 0) return;
+	const uint64 b2 = ak_a2k_vector[i].s1;
 
-	for (size_t i = 0; i < factors_loop; ++i)
+	for (uint32 j = 1; j < (3u << g_n); j += 2)
 	{
-		if (c % 2 != 0) c = p - c;
-		if (c <= 2000000000)
+		if (j % 3 != 0)
 		{
-			const uint factor_index = atomic_inc(factor_count);
-			factor[factor_index] = (ulong2)(p, c);
+			if (b <= 10 * 1000000000ul)
+			{
+				const uint factor_index = atomic_inc(factor_count);
+				factor[factor_index] = (ulong2)(p, b);
+			}
 		}
-		c = mul_mod(c, a2k, p, q);		// c = a^{(2*i + 1).k}
+
+		b = mul_mod(b, b2, p, q);		// b = (a^k)^j
 	}
 
-	c_a2k_vector[i].s0 = c;
+	// ak_a2k_vector[i].s0 = b;
 }
 
 __kernel

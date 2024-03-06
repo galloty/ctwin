@@ -142,12 +142,10 @@ public:
 	void quit() { _quit = true; }
 
 protected:
-	const size_t _factorSize = size_t(1) << 24;
-	const int _log2GlobalWorkSize = 21;
+	const size_t _factorSize = size_t(1) << 24;	// * 2 * 8: 256 MB
+	const int _log2GlobalWorkSize = 21;			// * 5 * 8: 80 MB
 	volatile bool _quit = false;
 	int _n = 0;
-	size_t _factorsLoop = 0;
-	size_t _savedCount = 0;
 	std::string _extension;
 
 private:
@@ -198,7 +196,6 @@ private:
 
 		std::stringstream src;
 		src << "#define\tg_n\t" << _n << std::endl;
-		src << "#define\tfactors_loop\t" << _factorsLoop << std::endl;
 		src << std::endl;
 
 		if (!readOpenCL("ocl/kernel.cl", "src/ocl/kernel.h", "src_ocl_kernel", src)) src << src_ocl_kernel;
@@ -237,18 +234,18 @@ private:
 		std::ofstream resFile(resFilename, std::ios::app);
 		if (resFile.is_open())
 		{
-			const int n = _n, N = uint32_t(1) << n;
-			for (size_t i = _savedCount; i < factorCount; ++i)
+			const int n = _n;
+			for (size_t i = 0; i < factorCount; ++i)
 			{
 				const cl_ulong2 & f = factor[i];
 				const uint64_t p = f.s[0], b = f.s[1];
 				if ((p < p_min * 1000000000000ull) || (p > p_max * 1000000000000ull)) continue;
 
 				const Mod mod(p);
-				if (mod.pow(b, 1 << n) == p - 1)
+				const uint64_t x = mod.pow(b, 1 << (n - 1)), r = mod.sub(mod.mul(x, x), x);
+				if (r == p - 1)
 				{
-					std::ostringstream ss; ss << p << " | " << b << "^" << N << "+1" << std::endl;
-					resFile << ss.str();
+					resFile << p << " " << b << std::endl;
 				}
 				else
 				{
@@ -259,7 +256,7 @@ private:
 					}
 					if (mod.isprime())
 					{
-						std::ostringstream ss; ss << p << " doesn't divide " << b << "^" << N << "+1";
+						std::ostringstream ss; ss << p << " doesn't divide " << b << "^" << (1 << n) << " - " << b << "^" << (1 << (n - 1)) <<" + 1";
 						throw std::runtime_error(ss.str());
 					}
 				}
@@ -274,8 +271,6 @@ public:
 	bool check(engine & engine, const int n, const uint32_t p_min, const uint32_t p_max)
 	{
 		_n = n;
-		_factorsLoop = size_t(1) << std::min(_n - 1, 10);
-		_savedCount = 0;
 		std::stringstream ss; ss << n << "_" << p_min << "_" << p_max << ".txt";
 		_extension = ss.str();
 
@@ -292,13 +287,11 @@ public:
 
 		initEngine(engine, _log2GlobalWorkSize);
 
-		const double f = 1e12 / pow(2.0, double(n + 1 + _log2GlobalWorkSize));
+		const double f = 1e12 / (3 * pow(2.0, double(_log2GlobalWorkSize + n)));
 		const uint64_t i_min = uint64_t(floor(p_min * f)), i_max = uint64_t(ceil(p_max * f));
 
-		const size_t N_2_factors_loop = (size_t(1) << (_n - 1)) / _factorsLoop;
-
-		const uint64_t p_min64 = ((i_min + cnt) << (_log2GlobalWorkSize + _n + 1)) + 1;
-		const uint64_t p_max64 = ((((i_max << _log2GlobalWorkSize) - 1) << (_n + 1)) + 1);
+		const uint64_t p_min64 = 3 * ((i_min + cnt) << (_log2GlobalWorkSize + _n)) + 1;
+		const uint64_t p_max64 = 3 * (((i_max << _log2GlobalWorkSize) - 1) << _n) + 1;
 
 		std::cout << ((cnt != 0) ? "Resuming from a checkpoint, t" : "T") << "esting n = " << _n << " from " << p_min64 << " to " << p_max64 << std::endl;
 
@@ -314,7 +307,7 @@ public:
 			const size_t primeCount = engine.readPrimeCount();
 			std::cout << primeCount << " primes" << std::endl;
 			engine.initFactors(globalWorkSize);
-			engine.checkFactors(globalWorkSize, N_2_factors_loop, 0);
+			engine.checkFactors(globalWorkSize);
 			const size_t factorCount = engine.readFactorCount();
 			std::cout << factorCount << " factors" << std::endl;
 			engine.clearPrimes();
@@ -348,6 +341,13 @@ public:
 		{
 			std::cout << " terminating...         \r";
 			saveFactors(engine, chrono.getElapsedTime(), p_min, p_max);
+
+			std::ofstream ctxFile(ctxFilename);
+			if (ctxFile.is_open())
+			{
+				ctxFile << cnt << std::endl;
+				ctxFile.close();
+			}
 		}
 
 		// engine.displayProfiles(1);

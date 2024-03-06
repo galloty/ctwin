@@ -12,7 +12,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 class engine : public device
 {
 private:
-	cl_mem _prime_vector = nullptr, _c_a2k_vector = nullptr, _factor_vector = nullptr;
+	cl_mem _prime_vector = nullptr, _ak_a2k_vector = nullptr, _factor_vector = nullptr;
 	cl_mem _prime_count = nullptr, _factor_count = nullptr;
 	cl_kernel _check_primes = nullptr, _init_factors = nullptr, _check_factors = nullptr, _clear_primes = nullptr;
 
@@ -27,7 +27,7 @@ public:
 		std::cerr << "Alloc gpu memory." << std::endl;
 #endif
 		_prime_vector = _createBuffer(CL_MEM_READ_WRITE, sizeof(cl_ulong3) * prime_size);	// p, q, one
-		_c_a2k_vector = _createBuffer(CL_MEM_READ_WRITE, sizeof(cl_ulong2) * prime_size);
+		_ak_a2k_vector = _createBuffer(CL_MEM_READ_WRITE, sizeof(cl_ulong2) * prime_size);
 		_factor_vector = _createBuffer(CL_MEM_READ_WRITE, sizeof(cl_ulong2) * factor_size);
 		_prime_count = _createBuffer(CL_MEM_READ_WRITE, sizeof(cl_uint));
 		_factor_count = _createBuffer(CL_MEM_READ_WRITE, sizeof(cl_uint));
@@ -40,7 +40,7 @@ public:
 		std::cerr << "Free gpu memory." << std::endl;
 #endif
 		_releaseBuffer(_prime_vector);
-		_releaseBuffer(_c_a2k_vector);
+		_releaseBuffer(_ak_a2k_vector);
 		_releaseBuffer(_factor_vector);
 		_releaseBuffer(_prime_count);
 		_releaseBuffer(_factor_count);
@@ -59,12 +59,12 @@ public:
 		_init_factors = _createKernel("init_factors");
 		_setKernelArg(_init_factors, 0, sizeof(cl_mem), &_prime_count);
 		_setKernelArg(_init_factors, 1, sizeof(cl_mem), &_prime_vector);
-		_setKernelArg(_init_factors, 2, sizeof(cl_mem), &_c_a2k_vector);
+		_setKernelArg(_init_factors, 2, sizeof(cl_mem), &_ak_a2k_vector);
 
 		_check_factors = _createKernel("check_factors");
 		_setKernelArg(_check_factors, 0, sizeof(cl_mem), &_prime_count);
 		_setKernelArg(_check_factors, 1, sizeof(cl_mem), &_prime_vector);
-		_setKernelArg(_check_factors, 2, sizeof(cl_mem), &_c_a2k_vector);
+		_setKernelArg(_check_factors, 2, sizeof(cl_mem), &_ak_a2k_vector);
 		_setKernelArg(_check_factors, 3, sizeof(cl_mem), &_factor_count);
 		_setKernelArg(_check_factors, 4, sizeof(cl_mem), &_factor_vector);
 
@@ -79,6 +79,9 @@ public:
 		std::cerr << "Release ocl kernels." << std::endl;
 #endif
 		_releaseKernel(_check_primes);
+		_releaseKernel(_init_factors);
+		_releaseKernel(_check_factors);
+		_releaseKernel(_clear_primes);
 	}
 
 public:
@@ -103,12 +106,9 @@ public:
 	}
 
 public:
-	void checkFactors(const size_t count, const uint32_t N_2_factors_loop, const size_t worksize)
+	void checkFactors(const size_t count)
 	{
-		for (size_t i = 0; i < N_2_factors_loop; ++i)
-		{
-			_executeKernel(_check_factors, count, worksize);
-		}
+		_executeKernel(_check_factors, count);
 	}
 
 public:

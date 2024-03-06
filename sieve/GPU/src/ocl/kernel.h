@@ -41,7 +41,7 @@ static const char * const src_ocl_kernel = \
 "		m %= n;	// (m/n) = (m mod n / n)\n" \
 "	}\n" \
 "\n" \
-"	return n;	// x and y are not coprime, return their gcd\n" \
+"	return 0;	// x and y are not coprime\n" \
 "}\n" \
 "\n" \
 "inline int uint64_log2(const uint64 x) { return 63 - clz(x); }\n" \
@@ -129,7 +129,7 @@ static const char * const src_ocl_kernel = \
 "{\n" \
 "	const uint64 k = index | get_global_id(0);\n" \
 "\n" \
-"	const uint64 p = (k << (g_n + 1)) | 1, q = invert(p), one = (-p) % p;\n" \
+"	const uint64 p = 3 * (k << g_n) + 1, q = invert(p), one = (-p) % p;\n" \
 "	if (prp(p, q, one))\n" \
 "	{\n" \
 "		const uint prime_index = atomic_inc(prime_count);\n" \
@@ -139,66 +139,95 @@ static const char * const src_ocl_kernel = \
 "\n" \
 "__kernel\n" \
 "void init_factors(__global const uint * restrict const prime_count, __global const ulong3 * restrict const prime_vector,\n" \
-"	__global ulong2 * restrict const c_a2k_vector)\n" \
+"	__global ulong2 * restrict const ak_a2k_vector)\n" \
 "{\n" \
 "	const size_t i = get_global_id(0);\n" \
 "	if (i >= *prime_count) return;\n" \
 "\n" \
 "	const uint64 p = prime_vector[i].s0, q = prime_vector[i].s1, one = prime_vector[i].s2;\n" \
 "\n" \
-"	const uint64 k = p >> (g_n + 1);\n" \
+"	const uint64 k = ((p - 1) / 3) >> g_n;\n" \
 "\n" \
-"	uint32 a;\n" \
-"	if ((p % 3) == 2) { a = 3; }\n" \
+"	uint32 a = 5;\n" \
+"	const uint64 two = add_mod(one, one, p);\n" \
+"	uint64 ma = add_mod(add_mod(two, two, p), one, p);\n" \
+"\n" \
+"	const uint32 pmod5 = p % 5;\n" \
+"	if (((pmod5 == 2) || (pmod5 == 3)) && (pow_mod(ma, k << (g_n - 1), p, q) != p - one)) {}\n" \
 "	else\n" \
 "	{\n" \
-"		const uint32 pmod5 = p % 5;\n" \
-"		if ((pmod5 == 2) || (pmod5 == 3)) { a = 5; }\n" \
+"		a += 2; ma = add_mod(ma, two, p);	// 7\n" \
+"		const uint32 pmod7 = p % 7;\n" \
+"		if (((pmod7 == 3) || (pmod7 == 5) || (pmod7 == 6)) && (pow_mod(ma, k << (g_n - 1), p, q) != p - one)) {}\n" \
 "		else\n" \
 "		{\n" \
-"			const uint32 pmod7 = p % 7;\n" \
-"			if ((pmod7 == 3) || (pmod7 == 5) || (pmod7 == 6)) { a = 7; }\n" \
-"			else\n" \
+"			a += 2; ma = add_mod(ma, two, p);	// 9\n" \
+"			a += 2; ma = add_mod(ma, two, p);	// 11\n" \
+"			while (a < 256)\n" \
 "			{\n" \
-"				for (a = 11; a < 256; a += 2)\n" \
-"				{\n" \
-"					const uint32 pmoda = p % a;\n" \
-"					if (jacobi(pmoda, a) == -1) break;\n" \
-"				}\n" \
-"				if (a >= 256) return;	// error?\n" \
+"				const uint32 pmoda = p % a;\n" \
+"				if ((jacobi(pmoda, a) == -1) && (pow_mod(ma, k << (g_n - 1), p, q) != p - one)) break;\n" \
+"\n" \
+"				a += 2; ma = add_mod(ma, two, p);\n" \
+"				if (a % 3 == 0) { a += 2; ma = add_mod(ma, two, p); }\n" \
+"			}\n" \
+"			if (a >= 256)	// error?\n" \
+"			{\n" \
+"				ak_a2k_vector[i] = (ulong2)(0, 0);\n" \
+"				return;\n" \
 "			}\n" \
 "		}\n" \
 "	}\n" \
-"	uint64 ma = toMp(a, p, q, one);\n" \
 "\n" \
-"	const uint64 c = pow_mod(ma, k, p, q);\n" \
-"	const uint64 a2k = mul_mod(c, c, p, q);\n" \
-"	c_a2k_vector[i] = (ulong2)(toInt(c, p, q), a2k);\n" \
+"/*	while (a < 256)\n" \
+"	{\n" \
+"		const uint32 pmoda = p % a;\n" \
+"		if ((jacobi(pmoda, a) == -1) && (pow_mod(ma, k << (g_n - 1), p, q) != p - one)) break;\n" \
+"\n" \
+"		// const uint64 t = pow_mod(ma, k << (g_n - 1), p, q);\n" \
+"		// if ((t != p - one) && (pow_mod(t, 3, p, q) == p - one)) break;\n" \
+"\n" \
+"		a += 2; ma = add_mod(ma, two, p);\n" \
+"		if (a % 3 == 0) { a += 2; ma = add_mod(ma, two, p); }\n" \
+"	}\n" \
+"	if (a >= 256)	// error?\n" \
+"	{\n" \
+"		ak_a2k_vector[i] = (ulong2)(0, 0);\n" \
+"		return;\n" \
+"	}*/\n" \
+"\n" \
+"	const uint64 ak = pow_mod(ma, k, p, q);\n" \
+"	const uint64 a2k = mul_mod(ak, ak, p, q);\n" \
+"	ak_a2k_vector[i] = (ulong2)(toInt(ak, p, q), a2k);\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
 "void check_factors(__global const uint * restrict const prime_count, __global const ulong3 * restrict const prime_vector,\n" \
-"	__global const ulong2 * restrict const c_a2k_vector, __global uint * restrict const factor_count, __global ulong2 * restrict const factor)\n" \
+"	__global const ulong2 * restrict const ak_a2k_vector, __global uint * restrict const factor_count, __global ulong2 * restrict const factor)\n" \
 "{\n" \
 "	const size_t i = get_global_id(0);\n" \
 "	if (i >= *prime_count) return;\n" \
 "\n" \
 "	const uint64 p = prime_vector[i].s0, q = prime_vector[i].s1;\n" \
-"	uint64 c = c_a2k_vector[i].s0;\n" \
-"	const uint64 a2k = c_a2k_vector[i].s1;\n" \
+"	uint64 b = ak_a2k_vector[i].s0;\n" \
+"	if (b == 0) return;\n" \
+"	const uint64 b2 = ak_a2k_vector[i].s1;\n" \
 "\n" \
-"	for (size_t i = 0; i < factors_loop; ++i)\n" \
+"	for (uint32 j = 1; j < (3u << g_n); j += 2)\n" \
 "	{\n" \
-"		if (c % 2 != 0) c = p - c;\n" \
-"		if (c <= 2000000000)\n" \
+"		if (j % 3 != 0)\n" \
 "		{\n" \
-"			const uint factor_index = atomic_inc(factor_count);\n" \
-"			factor[factor_index] = (ulong2)(p, c);\n" \
+"			if (b <= 10 * 1000000000ul)\n" \
+"			{\n" \
+"				const uint factor_index = atomic_inc(factor_count);\n" \
+"				factor[factor_index] = (ulong2)(p, b);\n" \
+"			}\n" \
 "		}\n" \
-"		c = mul_mod(c, a2k, p, q);		// c = a^{(2*i + 1).k}\n" \
+"\n" \
+"		b = mul_mod(b, b2, p, q);		// b = (a^k)^j\n" \
 "	}\n" \
 "\n" \
-"	c_a2k_vector[i].s0 = c;\n" \
+"	// ak_a2k_vector[i].s0 = b;\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
