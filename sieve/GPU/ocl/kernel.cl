@@ -133,11 +133,11 @@ void init_factors(__global const uint * restrict const prime_count, __global con
 	if (i >= *prime_count) return;
 
 	const uint64 p = prime_vector[i].s0, q = prime_vector[i].s1, one = prime_vector[i].s2;
+	const uint64 two = add_mod(one, one, p);
 
 	const uint64 k = ((p - 1) / 3) >> g_n;
 
 	uint32 a = 5;
-	const uint64 two = add_mod(one, one, p);
 	uint64 ma = add_mod(add_mod(two, two, p), one, p);
 
 	const uint32 pmod5 = p % 5;
@@ -167,22 +167,8 @@ void init_factors(__global const uint * restrict const prime_count, __global con
 		}
 	}
 
-/*	while (a < 256)
-	{
-		const uint32 pmoda = p % a;
-		if ((jacobi(pmoda, a) == -1) && (pow_mod(ma, k << (g_n - 1), p, q) != p - one)) break;
-
-		// const uint64 t = pow_mod(ma, k << (g_n - 1), p, q);
-		// if ((t != p - one) && (pow_mod(t, 3, p, q) == p - one)) break;
-
-		a += 2; ma = add_mod(ma, two, p);
-		if (a % 3 == 0) { a += 2; ma = add_mod(ma, two, p); }
-	}
-	if (a >= 256)	// error?
-	{
-		ak_a2k_vector[i] = (ulong2)(0, 0);
-		return;
-	}*/
+	// We have a^{3.k.2^{n-1}} = -1 and a^{k.2^{n-1}} != -1.
+	// Then x = (a^k)^{2^{n-1}} = j or 1/j and x^2 - x + 1 = 0.
 
 	const uint64 ak = pow_mod(ma, k, p, q);
 	const uint64 a2k = mul_mod(ak, ak, p, q);

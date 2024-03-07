@@ -139,11 +139,16 @@ public:
 	}
 
 public:
-	void quit() { _quit = true; }
+	void quit()
+	{
+		_quit = true;
+		std::cout << " terminating...         \r";
+	}
 
 protected:
-	const size_t _factorSize = size_t(1) << 24;	// * 2 * 8: 256 MB
-	const int _log2GlobalWorkSize = 21;			// * 5 * 8: 80 MB
+	static const size_t _factorSize = size_t(1) << 24;	// * 2 * 8: 256 MB
+	static const int _log2GlobalWorkSize = 21;			// * 5 * 8: 80 MB
+	static const size_t _globalWorkSize = size_t(1) << _log2GlobalWorkSize;
 	volatile bool _quit = false;
 	int _n = 0;
 	std::string _extension;
@@ -217,15 +222,12 @@ private:
 	}
 
 private:
-	void saveFactors(engine & engine, const double elapsedTime, const uint32_t p_min, const uint32_t p_max)
+	size_t saveFactors(engine & engine, const uint32_t p_min, const uint32_t p_max)
 	{
 		const size_t factorCount = engine.readFactorCount();
 
-		if (factorCount == 0) return;
+		if (factorCount == 0) return factorCount;
 		if (factorCount >= _factorSize) throw std::runtime_error("factor count is too large");
-
-		const std::string runtime = timer::formatTime(elapsedTime);
-		std::cout << factorCount << " factors, time = " << runtime << std::endl;
 
 		std::vector<cl_ulong2> factor(factorCount);
 		engine.readFactors(factor.data(), factorCount);
@@ -265,6 +267,32 @@ private:
 
 			engine.clearFactorCount();
 		}
+
+		 return factorCount;
+	}
+
+private:
+	void saveContext(const uint64_t cnt, const double elapsedTime) const
+	{
+		std::ofstream ctxFile(std::string("ctx") + _extension);
+		if (ctxFile.is_open())
+		{
+			ctxFile << cnt << std::endl;
+			ctxFile << elapsedTime << std::endl;
+			ctxFile.close();
+		}
+	}
+
+private:
+	void readContext(uint64_t & cnt, double & elapsedTime) const
+	{
+		std::ifstream ctxFile(std::string("ctx") + _extension);
+		if (ctxFile.is_open())
+		{
+			ctxFile >> cnt;
+			ctxFile >> elapsedTime;
+			ctxFile.close();
+		}
 	}
 
 public:
@@ -275,15 +303,8 @@ public:
 		_extension = ss.str();
 
 		uint64_t cnt = 0;
-		const std::string ctxFilename = std::string("ctx") + _extension;
-		{
-			std::ifstream ctxFile(ctxFilename);
-			if (ctxFile.is_open())
-			{
-				ctxFile >> cnt;
-				ctxFile.close();
-			}
-		}
+		double elapsedTime = 0;
+		readContext(cnt, elapsedTime);
 
 		initEngine(engine, _log2GlobalWorkSize);
 
@@ -295,58 +316,59 @@ public:
 
 		std::cout << ((cnt != 0) ? "Resuming from a checkpoint, t" : "T") << "esting n = " << _n << " from " << p_min64 << " to " << p_max64 << std::endl;
 
-		watch chrono(0);
+		watch chrono(elapsedTime);
 
-		const size_t globalWorkSize = size_t(1) << _log2GlobalWorkSize;
-
+		size_t j = 0, j_sync = 2;
 		for (uint64_t i = i_min + cnt; i < i_max; ++i)
 		{
 			if (_quit) break;
 
-			engine.checkPrimes(globalWorkSize, i << _log2GlobalWorkSize);
-			const size_t primeCount = engine.readPrimeCount();
-			std::cout << primeCount << " primes" << std::endl;
-			engine.initFactors(globalWorkSize);
-			engine.checkFactors(globalWorkSize);
-			const size_t factorCount = engine.readFactorCount();
-			std::cout << factorCount << " factors" << std::endl;
+			engine.checkPrimes(_globalWorkSize, i << _log2GlobalWorkSize);
+			// const size_t primeCount = engine.readPrimeCount();
+			// std::cout << primeCount << " primes" << std::endl;
+			engine.initFactors(_globalWorkSize);
+			engine.checkFactors(_globalWorkSize);
+			// const size_t factorCount = engine.readFactorCount();
+			// std::cout << factorCount << " factors" << std::endl;
 			engine.clearPrimes();
 
-			++cnt;
+			++cnt; ++j;
 
-			chrono.read();
-
-			if (chrono.getDisplayTime() > 1)
+			if (j == j_sync)
 			{
-				chrono.resetDisplayTime();
-				std::ostringstream ss; ss << std::setprecision(3) << " " << cnt * 100.0 / (i_max - i_min) << "% done    \r";
-				std::cout << ss.str();
-			}
+				const double recordTime = 10;
+				const size_t factorCount = engine.readFactorCount();
+				const double t = chrono.getElapsedTime(), dt = t - elapsedTime; elapsedTime = t;
+				const size_t timeStepCount = size_t(std::lrint(j * recordTime / dt));
+				const size_t sizeStepCount = size_t(std::lrint(j * (_factorSize / 2.0) / factorCount));
+				// std::cout << "dt = " << dt << ", timeStepCount: " << timeStepCount << ", sizeStepCount: " << sizeStepCount << std::endl;
+				
+				j = 0; j_sync = std::min(std::max(std::min(timeStepCount, sizeStepCount), size_t(2)), size_t(1024));
 
-			if (chrono.getRecordTime() > 5)
-			{
-				chrono.resetRecordTime();
-				saveFactors(engine, chrono.getElapsedTime(), p_min, p_max);
+				const size_t nf = saveFactors(engine, p_min, p_max);
+				saveContext(cnt, elapsedTime);
 
-				std::ofstream ctxFile(ctxFilename);
-				if (ctxFile.is_open())
-				{
-					ctxFile << cnt << std::endl;
-					ctxFile.close();
-				}
+				const double percent = cnt / double(i_max - i_min);
+				std::ostringstream ss; ss << std::setprecision(3) << 100.0 * percent << "% done, "
+					<< timer::formatTime(elapsedTime * (1 / percent - 1)) << " remaining, "
+					<< std::lrint(nf / dt) << " factors/sec.";
+				std::cout << timer::formatTime(elapsedTime) << ": " << ss.str() << std::endl;
 			}
 		}
 
 		if (cnt > 0)
 		{
-			std::cout << " terminating...         \r";
-			saveFactors(engine, chrono.getElapsedTime(), p_min, p_max);
-
-			std::ofstream ctxFile(ctxFilename);
-			if (ctxFile.is_open())
+			const size_t factorCount = engine.readFactorCount();
+			if (factorCount > 0)
 			{
-				ctxFile << cnt << std::endl;
-				ctxFile.close();
+				elapsedTime = chrono.getElapsedTime();
+				saveFactors(engine, p_min, p_max);
+				saveContext(cnt, elapsedTime);
+
+				const double percent = cnt / double(i_max - i_min);
+				std::ostringstream ss; ss << std::setprecision(3) << 100.0 * percent << "% done, "
+					<< timer::formatTime(elapsedTime * (1 / percent - 1)) << " remaining.";
+				std::cout << timer::formatTime(elapsedTime) << ": " << ss.str() << std::endl;
 			}
 		}
 

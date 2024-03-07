@@ -14,11 +14,11 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 struct timer
 {
-	typedef std::chrono::high_resolution_clock::time_point time;
+	typedef std::chrono::steady_clock::time_point time;
 
 	static time currentTime()
 	{
-		return std::chrono::high_resolution_clock::now();
+		return std::chrono::steady_clock::now();
 	}
 
 	static double diffTime(const time & end, const time & start)
@@ -43,24 +43,14 @@ private:
 	const double _elapsedTime;
 	const timer::time _startTime;
 	timer::time _currentTime;
-	timer::time _displayStartTime;
-	timer::time _recordStartTime;
 
 public:
 	watch(const double restoredTime = 0) : _elapsedTime(restoredTime), _startTime(timer::currentTime())
 	{
-		_currentTime = _displayStartTime = _recordStartTime = _startTime;
+		_currentTime = _startTime;
 	}
 
 	virtual ~watch() {}
 
-	void read() { _currentTime = timer::currentTime(); }
-
-	double getElapsedTime() { read(); return _elapsedTime + timer::diffTime(_currentTime, _startTime); }
-
-	double getDisplayTime() const { return timer::diffTime(_currentTime, _displayStartTime); }
-	double getRecordTime() const { return timer::diffTime(_currentTime, _recordStartTime); }
-
-	void resetDisplayTime() { _displayStartTime = _currentTime; }
-	void resetRecordTime() { _recordStartTime = _currentTime; }
+	double getElapsedTime() { _currentTime = timer::currentTime(); return _elapsedTime + timer::diffTime(_currentTime, _startTime); }
 };

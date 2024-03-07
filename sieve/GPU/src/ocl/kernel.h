@@ -145,11 +145,11 @@ static const char * const src_ocl_kernel = \
 "	if (i >= *prime_count) return;\n" \
 "\n" \
 "	const uint64 p = prime_vector[i].s0, q = prime_vector[i].s1, one = prime_vector[i].s2;\n" \
+"	const uint64 two = add_mod(one, one, p);\n" \
 "\n" \
 "	const uint64 k = ((p - 1) / 3) >> g_n;\n" \
 "\n" \
 "	uint32 a = 5;\n" \
-"	const uint64 two = add_mod(one, one, p);\n" \
 "	uint64 ma = add_mod(add_mod(two, two, p), one, p);\n" \
 "\n" \
 "	const uint32 pmod5 = p % 5;\n" \
@@ -179,22 +179,8 @@ static const char * const src_ocl_kernel = \
 "		}\n" \
 "	}\n" \
 "\n" \
-"/*	while (a < 256)\n" \
-"	{\n" \
-"		const uint32 pmoda = p % a;\n" \
-"		if ((jacobi(pmoda, a) == -1) && (pow_mod(ma, k << (g_n - 1), p, q) != p - one)) break;\n" \
-"\n" \
-"		// const uint64 t = pow_mod(ma, k << (g_n - 1), p, q);\n" \
-"		// if ((t != p - one) && (pow_mod(t, 3, p, q) == p - one)) break;\n" \
-"\n" \
-"		a += 2; ma = add_mod(ma, two, p);\n" \
-"		if (a % 3 == 0) { a += 2; ma = add_mod(ma, two, p); }\n" \
-"	}\n" \
-"	if (a >= 256)	// error?\n" \
-"	{\n" \
-"		ak_a2k_vector[i] = (ulong2)(0, 0);\n" \
-"		return;\n" \
-"	}*/\n" \
+"	// We have a^{3.k.2^{n-1}} = -1 and a^{k.2^{n-1}} != -1.\n" \
+"	// Then x = (a^k)^{2^{n-1}} = j or 1/j and x^2 - x + 1 = 0.\n" \
 "\n" \
 "	const uint64 ak = pow_mod(ma, k, p, q);\n" \
 "	const uint64 a2k = mul_mod(ak, ak, p, q);\n" \
