@@ -307,6 +307,7 @@ public:
 		readContext(cnt, elapsedTime);
 
 		initEngine(engine, _log2GlobalWorkSize);
+		// engine.setProfiling(true);
 
 		const double f = 1e12 / (3 * pow(2.0, double(_log2GlobalWorkSize + n)));
 		const uint64_t i_min = uint64_t(floor(p_min * f)), i_max = uint64_t(ceil(p_max * f));
@@ -373,7 +374,6 @@ public:
 		}
 
 		// engine.displayProfiles(1);
-
 		clearEngine(engine);
 
 		return true;

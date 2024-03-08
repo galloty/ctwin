@@ -189,12 +189,18 @@ void check_factors(__global const uint * restrict const prime_count, __global co
 	const uint64 b2 = mul_mod(b, b, p, q), b4 = mul_mod(b2, b2, p, q);
 	b = toInt(b, p, q);
 
-	for (uint32 j = 1; j < (3u << g_n); j += 6)
+	for (uint32 j = 1; j < (3u << (g_n - 1)); j += 6)
 	{
 		if (b <= 10 * 1000000000ul)
 		{
 			const uint factor_index = atomic_inc(factor_count);
 			factor[factor_index] = (ulong2)(p, b);
+		}
+
+		if (p - b <= 10 * 1000000000ul)
+		{
+			const uint factor_index = atomic_inc(factor_count);
+			factor[factor_index] = (ulong2)(p, p - b);
 		}
 
 		b = mul_mod(b, b4, p, q);		// b = (a^k)^{j + 4}
@@ -203,6 +209,12 @@ void check_factors(__global const uint * restrict const prime_count, __global co
 		{
 			const uint factor_index = atomic_inc(factor_count);
 			factor[factor_index] = (ulong2)(p, b);
+		}
+
+		if (p - b <= 10 * 1000000000ul)
+		{
+			const uint factor_index = atomic_inc(factor_count);
+			factor[factor_index] = (ulong2)(p, p - b);
 		}
 
 		b = mul_mod(b, b2, p, q);		// b = (a^k)^{j + 6}

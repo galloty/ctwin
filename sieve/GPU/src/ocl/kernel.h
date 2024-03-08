@@ -201,12 +201,18 @@ static const char * const src_ocl_kernel = \
 "	const uint64 b2 = mul_mod(b, b, p, q), b4 = mul_mod(b2, b2, p, q);\n" \
 "	b = toInt(b, p, q);\n" \
 "\n" \
-"	for (uint32 j = 1; j < (3u << g_n); j += 6)\n" \
+"	for (uint32 j = 1; j < (3u << (g_n - 1)); j += 6)\n" \
 "	{\n" \
 "		if (b <= 10 * 1000000000ul)\n" \
 "		{\n" \
 "			const uint factor_index = atomic_inc(factor_count);\n" \
 "			factor[factor_index] = (ulong2)(p, b);\n" \
+"		}\n" \
+"\n" \
+"		if (p - b <= 10 * 1000000000ul)\n" \
+"		{\n" \
+"			const uint factor_index = atomic_inc(factor_count);\n" \
+"			factor[factor_index] = (ulong2)(p, p - b);\n" \
 "		}\n" \
 "\n" \
 "		b = mul_mod(b, b4, p, q);		// b = (a^k)^{j + 4}\n" \
@@ -215,6 +221,12 @@ static const char * const src_ocl_kernel = \
 "		{\n" \
 "			const uint factor_index = atomic_inc(factor_count);\n" \
 "			factor[factor_index] = (ulong2)(p, b);\n" \
+"		}\n" \
+"\n" \
+"		if (p - b <= 10 * 1000000000ul)\n" \
+"		{\n" \
+"			const uint factor_index = atomic_inc(factor_count);\n" \
+"			factor[factor_index] = (ulong2)(p, p - b);\n" \
 "		}\n" \
 "\n" \
 "		b = mul_mod(b, b2, p, q);		// b = (a^k)^{j + 6}\n" \
