@@ -58,19 +58,19 @@ inline uint64 mul_mod(const uint64 a, const uint64 b, const uint64 p, const uint
 }
 
 // Montgomery form of 2^64 is (2^64)^2
-inline uint64 two_pow_64(const uint64 p, const uint64 q, const uint64 one)
-{
-	uint64 t = add_mod(one, one, p); t = add_mod(t, t, p);		// 4
-	t = add_mod(t, t, p); t = add_mod(t, t, p);					// 16
-	for (size_t i = 0; i < 4; ++i) t = mul_mod(t, t, p, q);		// 16^{2^4} = 2^64
-	return t;
-}
+// inline uint64 two_pow_64(const uint64 p, const uint64 q, const uint64 one)
+// {
+// 	uint64 t = add_mod(one, one, p); t = add_mod(t, t, p);		// 4
+// 	t = add_mod(t, t, p); t = add_mod(t, t, p);					// 16
+// 	for (size_t i = 0; i < 4; ++i) t = mul_mod(t, t, p, q);		// 16^{2^4} = 2^64
+// 	return t;
+// }
 
-inline uint64 toMp(const uint64 n, const uint64 p, const uint64 q, const uint64 one)
-{
-	const uint64 r2 = two_pow_64(p, q, one);
-	return mul_mod(n, r2, p, q);
-}
+// inline uint64 toMp(const uint64 n, const uint64 p, const uint64 q, const uint64 one)
+// {
+// 	const uint64 r2 = two_pow_64(p, q, one);
+// 	return mul_mod(n, r2, p, q);
+// }
 
 inline uint64 toInt(const uint64 r, const uint64 p, const uint64 q)
 {
@@ -113,7 +113,8 @@ inline bool prp(const uint64 p, const uint64 q, const uint64 one)
 }
 
 __kernel
-void check_primes(__global uint * restrict const prime_count, __global ulong3 * restrict const prime_vector, const ulong index)
+void check_primes(__global uint * restrict const prime_count, __global ulong2 * restrict const prime_vector,
+	__global ulong * restrict const ext_vector, const ulong index)
 {
 	const uint64 k = index | get_global_id(0);
 
@@ -121,18 +122,19 @@ void check_primes(__global uint * restrict const prime_count, __global ulong3 * 
 	if (prp(p, q, one))
 	{
 		const uint prime_index = atomic_inc(prime_count);
-		prime_vector[prime_index] = (ulong3)(p, q, one);
+		prime_vector[prime_index] = (ulong2)(p, q);
+		ext_vector[prime_index] = one;
 	}
 }
 
 __kernel
-void init_factors(__global const uint * restrict const prime_count, __global const ulong3 * restrict const prime_vector,
-	__global ulong2 * restrict const ak_a2k_vector)
+void init_factors(__global const uint * restrict const prime_count, __global const ulong2 * restrict const prime_vector,
+	__global ulong * restrict const ext_vector)
 {
 	const size_t i = get_global_id(0);
 	if (i >= *prime_count) return;
 
-	const uint64 p = prime_vector[i].s0, q = prime_vector[i].s1, one = prime_vector[i].s2;
+	const uint64 p = prime_vector[i].s0, q = prime_vector[i].s1, one = ext_vector[i];
 	const uint64 two = add_mod(one, one, p);
 
 	const uint64 k = ((p - 1) / 3) >> g_n;
@@ -161,7 +163,7 @@ void init_factors(__global const uint * restrict const prime_count, __global con
 			}
 			if (a >= 256)	// error?
 			{
-				ak_a2k_vector[i] = (ulong2)(0, 0);
+				ext_vector[i] = 0;
 				return;
 			}
 		}
@@ -170,38 +172,43 @@ void init_factors(__global const uint * restrict const prime_count, __global con
 	// We have a^{3.k.2^{n-1}} = -1 and a^{k.2^{n-1}} != -1.
 	// Then x = (a^k)^{2^{n-1}} = j or 1/j and x^2 - x + 1 = 0.
 
-	const uint64 ak = pow_mod(ma, k, p, q);
-	const uint64 a2k = mul_mod(ak, ak, p, q);
-	ak_a2k_vector[i] = (ulong2)(toInt(ak, p, q), a2k);
+	ext_vector[i] = pow_mod(ma, k, p, q);
 }
 
 __kernel
-void check_factors(__global const uint * restrict const prime_count, __global const ulong3 * restrict const prime_vector,
-	__global const ulong2 * restrict const ak_a2k_vector, __global uint * restrict const factor_count, __global ulong2 * restrict const factor)
+void check_factors(__global const uint * restrict const prime_count, __global const ulong2 * restrict const prime_vector,
+	__global const ulong * restrict const ext_vector, __global uint * restrict const factor_count, __global ulong2 * restrict const factor)
 {
 	const size_t i = get_global_id(0);
 	if (i >= *prime_count) return;
 
-	const uint64 p = prime_vector[i].s0, q = prime_vector[i].s1;
-	uint64 b = ak_a2k_vector[i].s0;
+	uint64 b = ext_vector[i];
 	if (b == 0) return;
-	const uint64 b2 = ak_a2k_vector[i].s1;
 
-	for (uint32 j = 1; j < (3u << g_n); j += 2)
+	const uint64 p = prime_vector[i].s0, q = prime_vector[i].s1;
+	const uint64 b2 = mul_mod(b, b, p, q), b4 = mul_mod(b2, b2, p, q);
+	b = toInt(b, p, q);
+
+	for (uint32 j = 1; j < (3u << g_n); j += 6)
 	{
-		if (j % 3 != 0)
+		if (b <= 10 * 1000000000ul)
 		{
-			if (b <= 10 * 1000000000ul)
-			{
-				const uint factor_index = atomic_inc(factor_count);
-				factor[factor_index] = (ulong2)(p, b);
-			}
+			const uint factor_index = atomic_inc(factor_count);
+			factor[factor_index] = (ulong2)(p, b);
 		}
 
-		b = mul_mod(b, b2, p, q);		// b = (a^k)^j
+		b = mul_mod(b, b4, p, q);		// b = (a^k)^{j + 4}
+
+		if (b <= 10 * 1000000000ul)
+		{
+			const uint factor_index = atomic_inc(factor_count);
+			factor[factor_index] = (ulong2)(p, b);
+		}
+
+		b = mul_mod(b, b2, p, q);		// b = (a^k)^{j + 6}
 	}
 
-	// ak_a2k_vector[i].s0 = b;
+	// ext_vector[i] = b;
 }
 
 __kernel

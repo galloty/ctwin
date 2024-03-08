@@ -147,7 +147,7 @@ public:
 
 protected:
 	static const size_t _factorSize = size_t(1) << 24;	// * 2 * 8: 256 MB
-	static const int _log2GlobalWorkSize = 21;			// * 5 * 8: 80 MB
+	static const int _log2GlobalWorkSize = 21;			// * 3 * 8: 48 MB
 	static const size_t _globalWorkSize = size_t(1) << _log2GlobalWorkSize;
 	volatile bool _quit = false;
 	int _n = 0;
@@ -342,7 +342,7 @@ public:
 				const size_t timeStepCount = size_t(std::lrint(j * recordTime / dt));
 				const size_t sizeStepCount = size_t(std::lrint(j * (_factorSize / 2.0) / factorCount));
 				// std::cout << "dt = " << dt << ", timeStepCount: " << timeStepCount << ", sizeStepCount: " << sizeStepCount << std::endl;
-				
+
 				j = 0; j_sync = std::min(std::max(std::min(timeStepCount, sizeStepCount), size_t(2)), size_t(1024));
 
 				const size_t nf = saveFactors(engine, p_min, p_max);
@@ -366,9 +366,9 @@ public:
 				saveContext(cnt, elapsedTime);
 
 				const double percent = cnt / double(i_max - i_min);
-				std::ostringstream ss; ss << std::setprecision(3) << 100.0 * percent << "% done, "
-					<< timer::formatTime(elapsedTime * (1 / percent - 1)) << " remaining.";
-				std::cout << timer::formatTime(elapsedTime) << ": " << ss.str() << std::endl;
+				std::ostringstream ss; ss << std::setprecision(3) << 100.0 * percent << "% done";
+				if (_quit) ss << ", " << timer::formatTime(elapsedTime * (1 / percent - 1)) << " remaining";
+				std::cout << timer::formatTime(elapsedTime) << ": " << ss.str() << "." << std::endl;
 			}
 		}
 

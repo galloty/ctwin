@@ -116,8 +116,8 @@ public:
 
 		// parse args
 		const int n = (args.size() > 0) ? std::atoi(args[0].c_str()) : 14;
-		const uint32_t p_min = (args.size() > 1) ? uint32_t(std::atoi(args[1].c_str())) : 1000u;
-		const uint32_t p_max = (args.size() > 2) ? uint32_t(std::atoi(args[2].c_str())) : 1010u;
+		const uint32_t p_min = (args.size() > 1) ? uint32_t(std::atoi(args[1].c_str())) : 1 * 1000u;
+		const uint32_t p_max = (args.size() > 2) ? uint32_t(std::atoi(args[2].c_str())) : p_min + 10u;
 		int d = 0;
 		for (size_t i = 3, size = args.size(); i < size; ++i)
 		{
