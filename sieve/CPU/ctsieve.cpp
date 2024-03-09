@@ -209,7 +209,7 @@ private:
 		uint64_t t = add(_one, _one); t = add(t, t);	// 4
 		t = add(t, t); t = add(t, t);					// 16
 		for (size_t i = 0; i < 4; ++i) t = mul(t, t);	// 16^{2^4} = 2^64
-		return uint64_t(t);
+		return t;
 	}
 
 public:
@@ -621,7 +621,7 @@ private:
 		if (cand)
 		{
 			std::ofstream file(get_cand_filename());
-			for (size_t i = 0, size = get_size(); i < size; ++i) if (!_bsieve[i]) file << _b_min + 1 + i << std::endl;
+			for (size_t i = 0, size = get_size(); i < size; ++i) if (!_bsieve[i]) file << _b_min + i << std::endl;
 			file.close();
 		}
 
@@ -648,6 +648,31 @@ private:
 			}
 		}
 		return !_quit;
+	}
+
+	bool check_root(const uint64_t b, const uint64_t b_min, const uint64_t b_max, const uint64_t p, const int n, const bool is_pos)
+	{
+		const uint64_t res = is_pos ? (p - 1) : 1;
+		for (uint64_t s = b; s <= b_max; s += p)
+		{
+			if (s >= b_min)
+			{
+				if (!_bsieve[s - b_min])
+				{
+					const Mod mod(p);
+					const uint64_t x = mod.pow(s, 1 << (n - 1)), r = mod.sub(mod.mul(x, x), x);
+					if (r == res) _bsieve[s - b_min] = true;
+					// May fail if p is not prime
+					else if (mod.isprime())
+					{
+						std::ostringstream ss; ss << "Calculation error (check_" << (is_pos ? "pos" : "neg") << "): p = " << p << ", b = " << s << ".";
+						throw std::runtime_error(ss.str());
+					}
+					else return false;
+				}
+			}
+		}
+		return true;
 	}
 
 	void check_pos(const uint64_t p_max)
@@ -681,34 +706,19 @@ private:
 					if (a % 3 == 0) { ++a; ma = mp.add(ma, mp.one()); }
 				}
 
-				const uint64_t c = mp.pow(ma, k), c2 = mp.mul(c, c);
+				const uint64_t c = mp.pow(ma, k), b2 = mp.mul(c, c), b4 = mp.mul(b2, b2);
+				uint64_t b = mp.toInt(c);
 
-				for (uint64_t i = 1, b = mp.toInt(c); i < (uint64_t(3) << n); i += 2, b = mp.mul(b, c2))
+				for (uint64_t i = 1; i < (uint64_t(3) << (n - 1)); i += 6)
 				{
-					if (i % 3 == 0) continue;
-
-					for (uint64_t s = b; s <= b_max; s += p)
-					{
-						if (s >= b_min)
-						{
-							if (!_bsieve[s - b_min])
-							{
-								const Mod mod(p);
-								const uint64_t x = mod.pow(s, 1 << (n - 1)), r = mod.sub(mod.mul(x, x), x);
-								if (r == p - 1) _bsieve[s - b_min] = true;
-								// May fail if p is not prime
-								else if (mod.isprime())
-								{
-									std::ostringstream ss; ss << "Calculation error (check_pos): p = " << p << ", b = " << s << ".";
-									throw std::runtime_error(ss.str());
-								}
-								else goto next_prime;
-							}
-						}
-					}
+					if (!check_root(b, b_min, b_max, p, n, true)) break;
+					if (!check_root(p - b, b_min, b_max, p, n, true)) break;
+					b = mp.mul(b, b4);
+					if (!check_root(b, b_min, b_max, p, n, true)) break;
+					if (!check_root(p - b, b_min, b_max, p, n, true)) break;
+					b = mp.mul(b, b2);
 				}
 
-				next_prime:
 				_p_min_pos = p;
 				if (!monitor(p)) return;
 			}
@@ -766,27 +776,9 @@ private:
 
 					for (const uint64_t & b : L)
 					{
-						for (uint64_t s = b; s <= b_max; s += p)
-						{
-							if (s >= b_min)
-							{
-								if (!_bsieve[s - b_min])
-								{
-									const Mod mod(p);
-									const uint64_t x = mod.pow(s, 1 << (n - 1)), r = mod.sub(mod.mul(x, x), x);
-									if (r == 1) _bsieve[s - b_min] = true;
-									else if (mod.isprime())
-									{
-										std::ostringstream ss; ss << "Calculation error (check_neg): p = " << p << ", b = " << s << ".";
-										throw std::runtime_error(ss.str());
-									}
-									else goto next_prime;
-								}
-							}
-						}
+						if (!check_root(b, b_min, b_max, p, n, false)) break;
 					}
 
-					next_prime:
 					_p_min_neg = p;
 					if (!monitor(p)) return;
 				}
@@ -807,6 +799,7 @@ public:
 		{
 			_p_min_pos = 3 * (1ull << _n) + 1; _p_min_neg = 11;
 			p_max_pos = 3 * (100000000ull << _n) + 1; p_max_neg = 10000000001ull;
+			// p_max_pos = 3 * (10000000ull << _n) + 1; p_max_neg = 1000000001ull;
 		}
 
 		std::cout << "ctwin-" << _n << ": b in [" << _b_min << ", " << _b_max << "]." << std::endl;
@@ -824,7 +817,7 @@ int main(int argc, char * argv[])
 	std::cout << std::fixed << std::setprecision(3);
 
 	// int n = 10, mode = 0;
-	// uint64_t b_min = 2, b_max = 10000000;
+	// uint64_t b_min = 2, b_max = 1000000;
 
 	if (argc != 5)
 	{
