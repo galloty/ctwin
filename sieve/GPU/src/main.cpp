@@ -96,11 +96,11 @@ private:
 		ss << "Usage: ctsieve <n> <p_min> <p_max> <mode> [options]" << std::endl;
 		ss << "  n is exponent: b^{2^n} - b^{2^{n-1}} +/- 1, 8 <= n <= 24." << std::endl;
 		// ss << "  b-range is [b_min; b_max]." << std::endl;
-		ss << "  p-range is [p_min; p_max], in T (10^12) values" << std::endl;
+		ss << "  p-range is [p_min; p_max], in P (10^15) values." << std::endl;
 		ss << "  mode is <+> or <->:" << std::endl;
 		ss << "    . +: extend the sieve limit for b^{2^n} - b^{2^{n-1}} + 1," << std::endl;
 		ss << "    . -: extend the sieve limit for b^{2^n} - b^{2^{n-1}} - 1." << std::endl;
-		ss << "  -d <n> or --device <n>: set device number=<n> (default 0)" << std::endl;
+		ss << "  -d <n> or --device <n>: set device number=<n> (default 0)." << std::endl;
 		return ss.str();
 	}
 
@@ -112,28 +112,51 @@ public:
 		platform platform;
 		platform.displayDevices();
 
-		// if (args.size() < 5) return;
+		// int n = 14, mode = 1, d = 0;
+		// const uint32_t p_min = 18000 * 1000u, p_max = p_min + 10u;
 
-		// parse args
-		const int n = (args.size() > 0) ? std::atoi(args[0].c_str()) : 14;
-		const uint32_t p_min = (args.size() > 1) ? uint32_t(std::atoi(args[1].c_str())) : 1 * 1000u;
-		const uint32_t p_max = (args.size() > 2) ? uint32_t(std::atoi(args[2].c_str())) : p_min + 10u;
-		int d = 0;
-		for (size_t i = 3, size = args.size(); i < size; ++i)
-		{
-			const std::string & arg = args[i];
-
-			if (arg.substr(0, 2) == "-d")
-			{
-				const std::string dev = ((arg == "-d") && (i + 1 < size)) ? args[++i] : arg.substr(2);
-				d = std::atoi(dev.c_str());
-				if (d >= int(platform.getDeviceCount())) throw std::runtime_error("invalid device number");
-			}
-		}
-
-		if ((n < 8) || (n > 24) || (p_min < 1) || (p_max <= p_min))
+		if (args.size() < 4)
 		{
 			std::cout << usage();
+			return;
+		}
+
+		int n = 0, mode = 0, d = 0;
+		uint32_t p_min = 0, p_max = 0;
+		try
+		{
+			n = std::atoi(args[0].c_str());
+			p_min = std::stoul(args[1]) * 1000u;
+			p_max = std::stoul(args[2]) * 1000u;
+			if (args[3] == "+") mode = 1; else if (args[3] == "-") mode = -1;
+
+			for (size_t i = 4, size = args.size(); i < size; ++i)
+			{
+				const std::string & arg = args[i];
+
+				if (arg.substr(0, 2) == "-d")
+				{
+					const std::string dev = ((arg == "-d") && (i + 1 < size)) ? args[++i] : arg.substr(2);
+					d = std::atoi(dev.c_str());
+					if (d >= int(platform.getDeviceCount())) throw std::runtime_error("invalid device number");
+				}
+			}
+		}
+		catch (...)
+		{
+			std::cout << usage();
+			return;
+		}
+
+		if ((n < 8) || (n > 24) || (mode == 0) || (p_min < 1) || (p_max <= p_min) || (p_max > 18446744))
+		{
+			std::cout << usage();
+			return;
+		}
+
+		if (mode == -1)
+		{
+			std::cout << "b^{2^n} - b^{2^{n-1}} - 1 is not yet implemented." << std::endl;
 			return;
 		}
 

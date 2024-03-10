@@ -350,7 +350,7 @@ public:
 
 		watch chrono(elapsedTime);
 
-		size_t j = 0, j_sync = 2;
+		size_t j = 0, j_sync = 10;
 		for (uint64_t i = i_min + cnt; i < i_max; ++i)
 		{
 			if (_quit) break;
@@ -368,20 +368,20 @@ public:
 
 			if (j == j_sync)
 			{
-				const double recordTime = 10;
+				const double recordTime = 120;
 				const size_t factorCount = engine.readFactorCount();
 				const double t = chrono.getElapsedTime(), dt = t - elapsedTime; elapsedTime = t;
 				const size_t timeStepCount = size_t(std::lrint(j * recordTime / dt));
 				const size_t sizeStepCount = size_t(std::lrint(j * (_factorSize / 2.0) / factorCount));
 				// std::cout << "dt = " << dt << ", timeStepCount: " << timeStepCount << ", sizeStepCount: " << sizeStepCount << std::endl;
 
-				j = 0; j_sync = std::min(std::max(std::min(timeStepCount, sizeStepCount), size_t(2)), size_t(1024));
+				j = 0; j_sync = std::max(std::min(timeStepCount, sizeStepCount), size_t(2));
 
 				const size_t nf = saveFactors(engine, p_min, p_max);
 				saveContext(cnt, elapsedTime);
 
 				const double percent = cnt / double(i_max - i_min);
-				std::ostringstream ss; ss << std::setprecision(3) << 100.0 * percent << "% done, "
+				std::ostringstream ss; ss << std::fixed << std::setprecision(3) << 100.0 * percent << "% done, "
 					<< timer::formatTime(elapsedTime * (1 / percent - 1)) << " remaining, "
 					<< std::lrint(nf / dt) << " factors/sec.";
 				std::cout << timer::formatTime(elapsedTime) << ": " << ss.str() << std::endl;
@@ -398,7 +398,7 @@ public:
 				saveContext(cnt, elapsedTime);
 
 				const double percent = cnt / double(i_max - i_min);
-				std::ostringstream ss; ss << std::setprecision(3) << 100.0 * percent << "% done";
+				std::ostringstream ss; ss << std::fixed << std::setprecision(3) << 100.0 * percent << "% done";
 				if (_quit) ss << ", " << timer::formatTime(elapsedTime * (1 / percent - 1)) << " remaining";
 				std::cout << timer::formatTime(elapsedTime) << ": " << ss.str() << "." << std::endl;
 			}

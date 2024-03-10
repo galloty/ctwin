@@ -149,15 +149,17 @@ void generate_factors(__global const uint * restrict const prime_count, __global
 	const uint64 b2 = mul_mod(b, b, p, q), b4 = mul_mod(b2, b2, p, q);
 	b = toInt(b, p, q);
 
+	const uint64 bMax = (p < 10000000000000000ul) ? 5 * 1000000000ul : 10 * 1000000000ul;
+
 	for (uint32 j = 1; j < (3u << (g_n - 1)); j += 6)
 	{
-		if (b <= 10 * 1000000000ul)
+		if (b <= bMax)
 		{
 			const uint factor_index = atomic_inc(factor_count);
 			factor[factor_index] = (ulong2)(p, b);
 		}
 
-		if (p - b <= 10 * 1000000000ul)
+		if (p - b <= bMax)
 		{
 			const uint factor_index = atomic_inc(factor_count);
 			factor[factor_index] = (ulong2)(p, p - b);
@@ -165,13 +167,13 @@ void generate_factors(__global const uint * restrict const prime_count, __global
 
 		b = mul_mod(b, b4, p, q);		// b = (a^k)^{j + 4}
 
-		if (b <= 10 * 1000000000ul)
+		if (b <= bMax)
 		{
 			const uint factor_index = atomic_inc(factor_count);
 			factor[factor_index] = (ulong2)(p, b);
 		}
 
-		if (p - b <= 10 * 1000000000ul)
+		if (p - b <= bMax)
 		{
 			const uint factor_index = atomic_inc(factor_count);
 			factor[factor_index] = (ulong2)(p, p - b);
