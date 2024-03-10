@@ -123,6 +123,30 @@ public:
 	}
 };
 
+inline int kronecker(const uint32_t x, const uint32_t y)
+{
+	uint32_t m = x, n = y;
+
+	int k = 1;
+	while (m != 0)
+	{
+		// (2/n) = (-1)^((n^2-1)/8)
+		bool odd = false;
+		while (m % 2 == 0) { m /= 2; odd = !odd; }
+		if (odd && (n % 8 != 1) && (n % 8 != 7)) k = -k;
+
+		if (m == 1) return k;	// (1/n) = 1
+
+		// (m/n)(n/m) = -1 iif m == n == 3 (mod 4)
+		if ((m % 4 == 3) && (n % 4 == 3)) k = -k;
+		std::swap(n, m);
+
+		m %= n;	// (m/n) = ({m mod n}/n)
+	}
+
+	return 0;	// x and y are not coprime
+}
+
 class gfsieve
 {
 private:
@@ -195,7 +219,7 @@ private:
 	}
 
 private:
-	void initEngine(engine & engine, const int log2Global) const
+	void initEngine(engine & engine, const int log2Global, const cl_char * const kro) const
 	{
 		const size_t globalWorkSize = size_t(1) << log2Global;
 
@@ -209,6 +233,7 @@ private:
 		engine.allocMemory(globalWorkSize, _factorSize);
 		engine.createKernels();
 
+		engine.writeKro(kro);
 		engine.clearPrimeCount();
 		engine.clearFactorCount();
 	}
@@ -232,7 +257,7 @@ private:
 		std::vector<cl_ulong2> factor(factorCount);
 		engine.readFactors(factor.data(), factorCount);
 
-		const std::string resFilename = std::string("f") + _extension;
+		const std::string resFilename = std::string("fp") + _extension;
 		std::ofstream resFile(resFilename, std::ios::app);
 		if (resFile.is_open())
 		{
@@ -306,7 +331,13 @@ public:
 		double elapsedTime = 0;
 		readContext(cnt, elapsedTime);
 
-		initEngine(engine, _log2GlobalWorkSize);
+		std::vector<cl_char> kro(128 * 256);
+		for (uint32_t a = 5; a < 256; a += 2)
+		{
+			for (uint32_t k = 0; k < a; ++k) kro[(a - 5) * 128 + k] = (kronecker(k, a) == -1) ? cl_char(1) : cl_char(0);
+		}
+
+		initEngine(engine, _log2GlobalWorkSize, kro.data());
 		// engine.setProfiling(true);
 
 		const double f = 1e12 / (3 * pow(2.0, double(_log2GlobalWorkSize + n)));
@@ -324,11 +355,11 @@ public:
 		{
 			if (_quit) break;
 
-			engine.checkPrimes(_globalWorkSize, i << _log2GlobalWorkSize);
+			engine.generatePrimes(_globalWorkSize, i << _log2GlobalWorkSize);
 			// const size_t primeCount = engine.readPrimeCount();
 			// std::cout << primeCount << " primes" << std::endl;
 			engine.initFactors(_globalWorkSize);
-			engine.checkFactors(_globalWorkSize);
+			engine.generateFactors(_globalWorkSize);
 			// const size_t factorCount = engine.readFactorCount();
 			// std::cout << factorCount << " factors" << std::endl;
 			engine.clearPrimes();
