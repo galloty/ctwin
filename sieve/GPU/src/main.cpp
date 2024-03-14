@@ -5,6 +5,11 @@ ctwin is free source code, under the MIT license (see LICENSE). You can redistri
 Please give feedback to the authors if improvement is realized. It is distributed in the hope that it will be useful.
 */
 
+#define MEGA	1000000ull
+#define GIGA	(MEGA * 1000u)
+#define TERA	(GIGA * 1000u)
+#define PETA	(TERA * 1000u)
+
 #include "ocl.h"
 #include "engine.h"
 #include "ctsieve.h"
@@ -112,58 +117,52 @@ public:
 		platform platform;
 		platform.displayDevices();
 
-		// int n = 14, mode = 1, d = 0;
-		// const uint32_t p_min = 18000 * 1000u, p_max = p_min + 10u;
+		int n = 14, mode = -1, d = 0;
+		const uint64_t p_min = (mode == 1) ? 1 * PETA : 1 * TERA, p_max = p_min + ((mode == 1) ? 10 * TERA : 1 * GIGA);
 
-		if (args.size() < 4)
+		// if (args.size() < 4)
+		// {
+		// 	std::cout << usage();
+		// 	return;
+		// }
+
+		// int n = 0, mode = 0, d = 0;
+		// uint64_t p_min = 0, p_max = 0;
+		// try
+		// {
+		// 	n = std::atoi(args[0].c_str());
+		// 	p_min = std::stoul(args[1]) * PETA;
+		// 	p_max = std::stoul(args[2]) * PETA;
+		// 	if (args[3] == "+") mode = 1; else if (args[3] == "-") mode = -1;
+
+		// 	for (size_t i = 4, size = args.size(); i < size; ++i)
+		// 	{
+		// 		const std::string & arg = args[i];
+
+		// 		if (arg.substr(0, 2) == "-d")
+		// 		{
+		// 			const std::string dev = ((arg == "-d") && (i + 1 < size)) ? args[++i] : arg.substr(2);
+		// 			d = std::atoi(dev.c_str());
+		// 			if (d >= int(platform.getDeviceCount())) throw std::runtime_error("invalid device number");
+		// 		}
+		// 	}
+		// }
+		// catch (...)
+		// {
+		// 	std::cout << usage();
+		// 	return;
+		// }
+
+		if ((n < 8) || (n > 24) || (mode == 0) || (p_max <= p_min))
 		{
 			std::cout << usage();
-			return;
-		}
-
-		int n = 0, mode = 0, d = 0;
-		uint32_t p_min = 0, p_max = 0;
-		try
-		{
-			n = std::atoi(args[0].c_str());
-			p_min = std::stoul(args[1]) * 1000u;
-			p_max = std::stoul(args[2]) * 1000u;
-			if (args[3] == "+") mode = 1; else if (args[3] == "-") mode = -1;
-
-			for (size_t i = 4, size = args.size(); i < size; ++i)
-			{
-				const std::string & arg = args[i];
-
-				if (arg.substr(0, 2) == "-d")
-				{
-					const std::string dev = ((arg == "-d") && (i + 1 < size)) ? args[++i] : arg.substr(2);
-					d = std::atoi(dev.c_str());
-					if (d >= int(platform.getDeviceCount())) throw std::runtime_error("invalid device number");
-				}
-			}
-		}
-		catch (...)
-		{
-			std::cout << usage();
-			return;
-		}
-
-		if ((n < 8) || (n > 24) || (mode == 0) || (p_min < 1) || (p_max <= p_min) || (p_max > 18446744))
-		{
-			std::cout << usage();
-			return;
-		}
-
-		if (mode == -1)
-		{
-			std::cout << "b^{2^n} - b^{2^{n-1}} - 1 is not yet implemented." << std::endl;
 			return;
 		}
 
 		gfsieve & sieve = gfsieve::getInstance();
 
 		engine engine(platform, size_t(d));
-		sieve.check(engine, n, p_min, p_max);
+		sieve.check(engine, n, p_min, p_max, mode);
 	}
 };
 

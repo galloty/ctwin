@@ -247,7 +247,7 @@ private:
 	}
 
 private:
-	size_t saveFactors(engine & engine, const uint32_t p_min, const uint32_t p_max)
+	size_t saveFactors(engine & engine, const uint64_t p_min, const uint64_t p_max, const int mode)
 	{
 		const size_t factorCount = engine.readFactorCount();
 
@@ -257,7 +257,8 @@ private:
 		std::vector<cl_ulong2> factor(factorCount);
 		engine.readFactors(factor.data(), factorCount);
 
-		const std::string resFilename = std::string("fp") + _extension;
+		const std::string fname = (mode == 1) ? "fp" : "fn";
+		const std::string resFilename = fname + _extension;
 		std::ofstream resFile(resFilename, std::ios::app);
 		if (resFile.is_open())
 		{
@@ -266,11 +267,11 @@ private:
 			{
 				const cl_ulong2 & f = factor[i];
 				const uint64_t p = f.s[0], b = f.s[1];
-				if ((p < p_min * 1000000000000ull) || (p > p_max * 1000000000000ull)) continue;
+				if ((p < p_min) || (p > p_max)) continue;
 
 				const Mod mod(p);
-				const uint64_t x = mod.pow(b, 1 << (n - 1)), r = mod.sub(mod.mul(x, x), x);
-				if (r == p - 1)
+				const uint64_t x = mod.pow(b, 1u << (n - 1)), r = mod.sub(mod.mul(x, x), x);
+				if (((mode > 0) && (r == p - 1)) || ((mode < 0) && (r == 1)))
 				{
 					resFile << p << " " << b << std::endl;
 				}
@@ -283,7 +284,8 @@ private:
 					}
 					if (mod.isprime())
 					{
-						std::ostringstream ss; ss << p << " doesn't divide " << b << "^" << (1 << n) << " - " << b << "^" << (1 << (n - 1)) <<" + 1";
+						const std::string sgn = (mode == 1) ? "+" : "-";
+						std::ostringstream ss; ss << p << " doesn't divide " << b << "^" << (1 << n) << " - " << b << "^" << (1 << (n - 1)) << " " << sgn << " 1";
 						throw std::runtime_error(ss.str());
 					}
 				}
@@ -297,9 +299,10 @@ private:
 	}
 
 private:
-	void saveContext(const uint64_t cnt, const double elapsedTime) const
+	void saveContext(const uint64_t cnt, const double elapsedTime, const int mode) const
 	{
-		std::ofstream ctxFile(std::string("ctx") + _extension);
+		const std::string cname = (mode == 1) ? "ctx" : "ctx_n";
+		std::ofstream ctxFile(cname + _extension);
 		if (ctxFile.is_open())
 		{
 			ctxFile << cnt << std::endl;
@@ -309,9 +312,10 @@ private:
 	}
 
 private:
-	void readContext(uint64_t & cnt, double & elapsedTime) const
+	void readContext(uint64_t & cnt, double & elapsedTime, const int mode) const
 	{
-		std::ifstream ctxFile(std::string("ctx") + _extension);
+		const std::string cname = (mode == 1) ? "ctx" : "ctx_n";
+		std::ifstream ctxFile(cname + _extension);
 		if (ctxFile.is_open())
 		{
 			ctxFile >> cnt;
@@ -321,15 +325,16 @@ private:
 	}
 
 public:
-	bool check(engine & engine, const int n, const uint32_t p_min, const uint32_t p_max)
+	bool check(engine & engine, const int n, const uint64_t p_min, const uint64_t p_max, const int mode)
 	{
 		_n = n;
-		std::stringstream ss; ss << n << "_" << p_min << "_" << p_max << ".txt";
+		const uint64_t scale = (mode == 1) ? TERA : GIGA;
+		std::stringstream ss; ss << n << "_" << (p_min / scale) << "_" << (p_max / scale) << ".txt";
 		_extension = ss.str();
 
 		uint64_t cnt = 0;
 		double elapsedTime = 0;
-		readContext(cnt, elapsedTime);
+		readContext(cnt, elapsedTime, mode);
 
 		std::vector<cl_char> kro(128 * 256);
 		for (uint32_t a = 5; a < 256; a += 2)
@@ -340,13 +345,19 @@ public:
 		initEngine(engine, _log2GlobalWorkSize, kro.data());
 		// engine.setProfiling(true);
 
-		const double f = 1e12 / (3 * pow(2.0, double(_log2GlobalWorkSize + n)));
+		const double f = (mode == 1)
+			? 1.0 / (3ull << (_log2GlobalWorkSize + n))
+			: 1.0 / (10u << _log2GlobalWorkSize);
 		const uint64_t i_min = uint64_t(floor(p_min * f)), i_max = uint64_t(ceil(p_max * f));
 
-		const uint64_t p_min64 = 3 * ((i_min + cnt) << (_log2GlobalWorkSize + _n)) + 1;
-		const uint64_t p_max64 = 3 * (((i_max << _log2GlobalWorkSize) - 1) << _n) + 1;
+		const uint64_t p_min_blk = (mode == 1)
+			? 3 * ((i_min + cnt) << (_log2GlobalWorkSize + _n)) + 1
+			: 10 * (i_min << _log2GlobalWorkSize) - 1;
+		const uint64_t p_max_blk = (mode == 1)
+			? 3 * (((i_max << _log2GlobalWorkSize) - 1) << _n) + 1
+			: 10 * ((i_max << _log2GlobalWorkSize) - 1) + 1;
 
-		std::cout << ((cnt != 0) ? "Resuming from a checkpoint, t" : "T") << "esting n = " << _n << " from " << p_min64 << " to " << p_max64 << std::endl;
+		std::cout << ((cnt != 0) ? "Resuming from a checkpoint, t" : "T") << "esting n = " << _n << " from " << p_min_blk << " to " << p_max_blk << std::endl;
 
 		watch chrono(elapsedTime);
 
@@ -355,13 +366,22 @@ public:
 		{
 			if (_quit) break;
 
-			engine.generatePrimes(_globalWorkSize, i << _log2GlobalWorkSize);
-			// const size_t primeCount = engine.readPrimeCount();
-			// std::cout << primeCount << " primes" << std::endl;
-			engine.initFactors(_globalWorkSize);
-			engine.generateFactors(_globalWorkSize);
-			// const size_t factorCount = engine.readFactorCount();
-			// std::cout << factorCount << " factors" << std::endl;
+			if (mode == 1)
+			{
+				engine.generatePrimesPos(_globalWorkSize, i << _log2GlobalWorkSize);
+				// std::cout << engine.readPrimeCount() << " primes" << std::endl;
+				engine.initFactorsPos(_globalWorkSize);
+				engine.generateFactorsPos(_globalWorkSize);
+				// std::cout << engine.readFactorCount() << " factors" << std::endl;
+			}
+			else
+			{
+				engine.generatePrimesNeg(_globalWorkSize, i << _log2GlobalWorkSize);
+				// std::cout << engine.readPrimeCount() << " primes" << std::endl;
+				engine.initFactorsNeg(_globalWorkSize);
+				engine.generateFactorsNeg(_globalWorkSize);
+				// std::cout << engine.readFactorCount() << " factors" << std::endl;
+			}
 			engine.clearPrimes();
 
 			++cnt; ++j;
@@ -377,8 +397,8 @@ public:
 
 				j = 0; j_sync = std::max(std::min(timeStepCount, sizeStepCount), size_t(2));
 
-				const size_t nf = saveFactors(engine, p_min, p_max);
-				saveContext(cnt, elapsedTime);
+				const size_t nf = saveFactors(engine, p_min, p_max, mode);
+				saveContext(cnt, elapsedTime, mode);
 
 				const double percent = cnt / double(i_max - i_min);
 				std::ostringstream ss; ss << std::fixed << std::setprecision(3) << 100.0 * percent << "% done, "
@@ -394,8 +414,8 @@ public:
 			if (factorCount > 0)
 			{
 				elapsedTime = chrono.getElapsedTime();
-				saveFactors(engine, p_min, p_max);
-				saveContext(cnt, elapsedTime);
+				saveFactors(engine, p_min, p_max, mode);
+				saveContext(cnt, elapsedTime, mode);
 
 				const double percent = cnt / double(i_max - i_min);
 				std::ostringstream ss; ss << std::fixed << std::setprecision(3) << 100.0 * percent << "% done";
