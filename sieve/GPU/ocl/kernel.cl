@@ -123,56 +123,46 @@ inline int jacobi(const uint64 x, const uint64 y)
 	return 0;	// x and y are not coprime
 }
 
+// sqrt for p = 3 (mod 4)
+inline uint64 sqrt_mod_3_4(const uint64 a, const uint64 p, const uint64 q)
+{
+	return pow_mod(a, (p + 1) / 4, p, q);
+}
+
+// sqrt for p = 5 (mod 8)
+inline uint64 sqrt_mod_5_8(const uint64 a, const uint64 p, const uint64 q, const uint64 one)
+{
+	const uint64 b = add_mod(a, a, p);
+	const uint64 v = pow_mod(b, (p - 5) / 8, p, q);
+	const uint64 i = mul_mod(b, mul_mod(v, v, p, q), p, q);	// i^2 = -1
+	return mul_mod(mul_mod(a, v, p, q), sub_mod(i, one, p), p, q);
+}
+
+// Cipolla's algorithm
 inline uint64 sqrt_mod(const uint64 a, const uint64 p, const uint64 q, const uint64 one)
 {
 	if ((a == 0) || (a == one)) return a;
 
-	uint64 sa = 0;
-	if (p % 4 == 3)
+	uint64 d = 2, md = add_mod(one, one, p), ai = p - toInt(a, p, q);
+	while (d < 256)
 	{
-		sa = pow_mod(a, (p + 1) / 4, p, q);
+		if (jacobi(d * d + ai, p) == -1) break;
+		++d; md = add_mod(md, one, p);
 	}
-	else if (p % 8 == 5)
+	if (d >= 256) return 0;
+
+	const uint64 w2 = sub_mod(mul_mod(md, md, p, q), a, p), e = (p + 1) / 2;
+	uint64 x = md, y = one;
+	for (int b = uint64_log2(e) - 1; b >= 0; --b)
 	{
-		const uint64 b = add_mod(a, a, p);
-		const uint64 v = pow_mod(b, (p - 5) / 8, p, q);
-		const uint64 i = mul_mod(b, mul_mod(v, v, p, q), p, q);	// i^2 = -1
-		sa = mul_mod(mul_mod(a, v, p, q), sub_mod(i, one, p), p, q);
-	}
-	else
-	{
-		// Tonelli-Shanks algorithm
-
-		// p = k * 2^e + 1, q odd
-		uint64 k = p - 1; uint32 e = 0; while (k % 2 == 0) { k /= 2; ++e; }
-
-		uint64 z = 3; while (jacobi(z, p) != -1) ++z;
-
-		z = pow_mod(toMp(z, p, q, one), k, p, q);
-
-		uint64 y = z;
-		uint32 r = e;
-		uint64 x = pow_mod(a, (k - 1) / 2, p, q);
-		uint64 b = mul_mod(a, mul_mod(x, x, p, q), p, q);
-		x = mul_mod(a, x, p, q);
-
-		for (uint32 j = 0; j < 64; ++j)
+		const uint64 t = add_mod(mul_mod(x, x, p, q), mul_mod(mul_mod(y, y, p, q), w2, p, q), p); y = mul_mod(add_mod(x, x, p), y, p, q); x = t;
+		if ((e & ((uint64)(1) << b)) != 0)
 		{
-			if (b == one) { sa = x; break; }
-
-			uint32 m = 1;
-			uint64 t = b; while (m < r) { t = mul_mod(t, t, p, q); if (t == one) break; ++m; }
-			if (m == r) break;
-
-			t = y; for (uint32 i = 0; i < r - 1 - m; ++i) t = mul_mod(t, t, p, q);
-			y = mul_mod(t, t, p, q);
-			r = m;
-			x = mul_mod(x, t, p, q);
-			b = mul_mod(b, y, p, q);
+			const uint64 t = add_mod(mul_mod(x, md, p, q), mul_mod(y, w2, p, q), p); y = add_mod(x, mul_mod(y, md, p, q), p); x = t;
 		}
 	}
 
-	return ((mul_mod(sa, sa, p, q) == a) ? sa : 0);
+	return ((mul_mod(x, x, p, q) == a) ? x : 0);
 }
 
 inline uint64 sqrtn(const uint64 a, const uint32 n, const uint64 p, const uint64 q, const uint64 one)
@@ -199,7 +189,17 @@ inline uint64 sqrtn(const uint64 a, const uint32 n, const uint64 p, const uint64
 	if (m > 1) r = pow_mod(r, m, p, q);
 
 	return r;
+}
+
+inline void push_factor(const uint64 b, uint64 bMax, const uint64 p,
+	__global uint * restrict const factor_count, __global ulong2 * restrict const factor)
+{
+	if (b <= bMax)
+	{
+		const uint factor_index = atomic_inc(factor_count);
+		factor[factor_index] = (ulong2)(p, b);
 	}
+}
 
 __kernel
 void generate_primes_pos(__global uint * restrict const prime_count, __global ulong2 * restrict const prime_vector,
@@ -266,31 +266,13 @@ void generate_factors_pos(__global const uint * restrict const prime_count, __gl
 
 	for (uint32 j = 1; j < (3u << (g_n - 1)); j += 6)
 	{
-		if (b <= bMax)
-		{
-			const uint factor_index = atomic_inc(factor_count);
-			factor[factor_index] = (ulong2)(p, b);
-		}
-
-		if (p - b <= bMax)
-		{
-			const uint factor_index = atomic_inc(factor_count);
-			factor[factor_index] = (ulong2)(p, p - b);
-		}
+		push_factor(b, bMax, p, factor_count, factor);
+		push_factor(p - b, bMax, p, factor_count, factor);
 
 		b = mul_mod(b, b4, p, q);		// b = (a^k)^{j + 4}
 
-		if (b <= bMax)
-		{
-			const uint factor_index = atomic_inc(factor_count);
-			factor[factor_index] = (ulong2)(p, b);
-		}
-
-		if (p - b <= bMax)
-		{
-			const uint factor_index = atomic_inc(factor_count);
-			factor[factor_index] = (ulong2)(p, p - b);
-		}
+		push_factor(b, bMax, p, factor_count, factor);
+		push_factor(p - b, bMax, p, factor_count, factor);
 
 		b = mul_mod(b, b2, p, q);		// b = (a^k)^{j + 6}
 	}
@@ -299,65 +281,98 @@ void generate_factors_pos(__global const uint * restrict const prime_count, __gl
 }
 
 __kernel
-void generate_primes_neg(__global uint * restrict const prime_count, __global ulong2 * restrict const prime_vector,
-	__global ulong2 * restrict const ext2_vector, const ulong index)
+void clear_primes_pos(__global uint * restrict const prime_count)
+{
+	*prime_count = 0;
+}
+
+__kernel
+void generate_primes_neg(__global uint * restrict const prime_count, __global ulong2 * restrict const prime_vector, __global ulong2 * restrict const ext_vector,
+	__global uint * restrict const prime_3_4_count, __global ulong2 * restrict const prime_3_4_vector, __global ulong2 * restrict const ext_3_4_vector,
+	const ulong index)
 {
 	const uint64 k = index | get_global_id(0);
 
-	const uint64 p_1 = 10 * k - 1, q_1 = invert(p_1), one_1 = (-p_1) % p_1;
-	if (prp(p_1, q_1, one_1))
+	for (uint32 i = 0; i <= 1; ++i)
 	{
-		const uint prime_index = atomic_inc(prime_count);
-		prime_vector[prime_index] = (ulong2)(p_1, q_1);
-		ext2_vector[prime_index] = (ulong2)(one_1, 0);
-	}
-
-	const uint64 p_2 = 10 * k + 1, q_2 = invert(p_2), one_2 = (-p_2) % p_2;
-	if (prp(p_2, q_2, one_2))
-	{
-		const uint prime_index = atomic_inc(prime_count);
-		prime_vector[prime_index] = (ulong2)(p_2, q_2);
-		ext2_vector[prime_index] = (ulong2)(one_2, 0);
+		const uint64 p = 10 * k + 2 * i - 1, q = invert(p), one = (-p) % p;
+		if (prp(p, q, one))
+		{
+			if (p % 4 == 3)
+			{
+				const uint prime_index = atomic_inc(prime_3_4_count);
+				prime_3_4_vector[prime_index] = (ulong2)(p, q);
+				ext_3_4_vector[prime_index] = (ulong2)(one, 0);
+			}
+			else
+			{
+				const uint prime_index = atomic_inc(prime_count);
+				prime_vector[prime_index] = (ulong2)(p, q);
+				ext_vector[prime_index] = (ulong2)(one, 0);
+			}
+		}
 	}
 }
 
 __kernel
+void init_3_4_factors_neg(__global const uint * restrict const prime_3_4_count, __global const ulong2 * restrict const prime_3_4_vector,
+	__global ulong2 * restrict const ext_3_4_vector)
+{
+	const size_t i = get_global_id(0);
+	if (i >= *prime_3_4_count) return;
+
+	const uint64 p = prime_3_4_vector[i].s0, q = prime_3_4_vector[i].s1;
+	const uint64 one = ext_3_4_vector[i].s0, two = add_mod(one, one, p), five = add_mod(add_mod(two, two, p), one, p);
+
+	const uint64 s5 = sqrt_mod_3_4(five, p, q);
+	if (s5 == 0) { ext_3_4_vector[i] = (ulong2)(0, 0); return; }
+
+	const uint64 r = half_mod(sub_mod(one, s5, p), p);
+	const bool is_square = (jacobi(toInt(r, p, q), p) == 1);
+	const uint64 rs = is_square ? r : sub_mod(one, r, p);
+	const uint64 sn = sqrtn(rs, g_n - 1, p, q, one);
+	ext_3_4_vector[i] = (ulong2)(sn, 0);
+}
+
+__kernel
 void init_factors_neg(__global const uint * restrict const prime_count, __global const ulong2 * restrict const prime_vector,
-	__global ulong2 * restrict const ext2_vector, __global const char * restrict const kro_vector)
+	__global ulong2 * restrict const ext_vector)
 {
 	const size_t i = get_global_id(0);
 	if (i >= *prime_count) return;
 
 	const uint64 p = prime_vector[i].s0, q = prime_vector[i].s1;
-	const uint64 one = ext2_vector[i].s0, two = add_mod(one, one, p), five = add_mod(add_mod(two, two, p), one, p);
+	const uint64 one = ext_vector[i].s0, two = add_mod(one, one, p), five = add_mod(add_mod(two, two, p), one, p);
 
 	const uint64 s5 = sqrt_mod(five, p, q, one);
-	if (s5 == 0) { ext2_vector[i] = (ulong2)(0, 0); return; }
+	if (s5 == 0) { ext_vector[i] = (ulong2)(0, 0); return; }
 
 	const uint64 r = half_mod(sub_mod(one, s5, p), p);
-	if (p % 4 == 3)
+	const bool is_square = (jacobi(toInt(r, p, q), p) == 1);
+	/*if (p % 4 == 3)
 	{
-		const uint64 rs = (jacobi(toInt(r, p, q), p) != 1) ? sub_mod(one, r, p) : r;
+		const uint64 rs = is_square ? r : sub_mod(one, r, p);
 		const uint64 sn = sqrtn(rs, g_n - 1, p, q, one);
-		ext2_vector[i] = (ulong2)(sn, 0);
+		ext_vector[i] = (ulong2)(sn, 0);
 	}
-	else if (jacobi(toInt(r, p, q), p) == 1)
+	else*/ if (is_square)
 	{
 		const uint64 sn1 = sqrtn(r, g_n - 1, p, q, one);
 		const uint64 sn2 = sqrtn(sub_mod(one, r, p), g_n - 1, p, q, one);
-		ext2_vector[i] = (ulong2)(sn1, sn2);
+		ext_vector[i] = (ulong2)(sn1, sn2);
 	}
-	else ext2_vector[i] = (ulong2)(0, 0);
+	else ext_vector[i] = (ulong2)(0, 0);
 }
 
 __kernel
 void generate_factors_neg(__global const uint * restrict const prime_count, __global const ulong2 * restrict const prime_vector,
-	__global const ulong2 * restrict const ext2_vector, __global uint * restrict const factor_count, __global ulong2 * restrict const factor)
+	__global const ulong2 * restrict const ext_vector, __global const char * restrict const kro_vector,
+	__global uint * restrict const factor_count, __global ulong2 * restrict const factor)
 {
 	const size_t i = get_global_id(0);
 	if (i >= *prime_count) return;
 
-	uint64 r1 = ext2_vector[i].s0, r2 = ext2_vector[i].s1;
+	uint64 r1 = ext_vector[i].s0, r2 = ext_vector[i].s1;
 
 	const uint64 p = prime_vector[i].s0, q = prime_vector[i].s1;
 
@@ -376,51 +391,30 @@ void generate_factors_neg(__global const uint * restrict const prime_count, __gl
 
 	if (r1 != 0)
 	{
+		uint64 b = toInt(r1, p, q);
 		for (uint32 i = 0, s = 1u << e; i < s; i += 2)
 		{
-			const uint64 b = toInt(r1, p, q);
-
-			if (b <= bMax)
-			{
-				const uint factor_index = atomic_inc(factor_count);
-				factor[factor_index] = (ulong2)(p, b);
-			}
-
-			if (p - b <= bMax)
-			{
-				const uint factor_index = atomic_inc(factor_count);
-				factor[factor_index] = (ulong2)(p, p - b);
-			}
-
-			r1 = mul_mod(r1, u, p, q);
+			push_factor(b, bMax, p, factor_count, factor);
+			push_factor(p - b, bMax, p, factor_count, factor);
+			b = mul_mod(b, u, p, q);
 		}
 	}
 
 	if (r2 != 0)
 	{
+		uint64 b = toInt(r2, p, q);
 		for (uint32 i = 0, s = 1u << e; i < s; i += 2)
 		{
-			const uint64 b = toInt(r2, p, q);
-
-			if (b <= bMax)
-			{
-				const uint factor_index = atomic_inc(factor_count);
-				factor[factor_index] = (ulong2)(p, b);
-			}
-
-			if (p - b <= bMax)
-			{
-				const uint factor_index = atomic_inc(factor_count);
-				factor[factor_index] = (ulong2)(p, p - b);
-			}
-
-			r2 = mul_mod(r2, u, p, q);
+			push_factor(b, bMax, p, factor_count, factor);
+			push_factor(p - b, bMax, p, factor_count, factor);
+			b = mul_mod(b, u, p, q);
 		}
 	}
 }
 
 __kernel
-void clear_primes(__global uint * restrict const prime_count)
+void clear_primes_neg(__global uint * restrict const prime_count, __global uint * restrict const _prime_3_4_count)
 {
 	*prime_count = 0;
+	*_prime_3_4_count = 0;
 }

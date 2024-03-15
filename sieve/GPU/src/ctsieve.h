@@ -219,7 +219,7 @@ private:
 	}
 
 private:
-	void initEngine(engine & engine, const int log2Global, const cl_char * const kro) const
+	void initEngine(engine & engine, const int log2Global, const cl_char * const kro, const int mode) const
 	{
 		const size_t globalWorkSize = size_t(1) << log2Global;
 
@@ -230,12 +230,10 @@ private:
 		if (!readOpenCL("ocl/kernel.cl", "src/ocl/kernel.h", "src_ocl_kernel", src)) src << src_ocl_kernel;
 
 		engine.loadProgram(src.str());
-		engine.allocMemory(globalWorkSize, _factorSize);
-		engine.createKernels();
+		engine.allocMemory(globalWorkSize, _factorSize, mode);
+		engine.createKernels(mode);
 
 		engine.writeKro(kro);
-		engine.clearPrimeCount();
-		engine.clearFactorCount();
 	}
 
 private:
@@ -342,8 +340,8 @@ public:
 			for (uint32_t k = 0; k < a; ++k) kro[(a - 5) * 128 + k] = (kronecker(k, a) == -1) ? cl_char(1) : cl_char(0);
 		}
 
-		initEngine(engine, _log2GlobalWorkSize, kro.data());
-		// engine.setProfiling(true);
+		initEngine(engine, _log2GlobalWorkSize, kro.data(), mode);
+		engine.setProfiling(true);
 
 		const double f = (mode == 1)
 			? 1.0 / (3ull << (_log2GlobalWorkSize + n))
@@ -361,28 +359,30 @@ public:
 
 		watch chrono(elapsedTime);
 
+		if (mode > 0) engine.clearPrimesPos();
+		if (mode < 0) engine.clearPrimesNeg();
+
 		size_t j = 0, j_sync = 10;
 		for (uint64_t i = i_min + cnt; i < i_max; ++i)
 		{
 			if (_quit) break;
 
-			if (mode == 1)
+			if (mode > 0)
 			{
 				engine.generatePrimesPos(_globalWorkSize, i << _log2GlobalWorkSize);
 				// std::cout << engine.readPrimeCount() << " primes" << std::endl;
 				engine.initFactorsPos(_globalWorkSize);
 				engine.generateFactorsPos(_globalWorkSize);
 				// std::cout << engine.readFactorCount() << " factors" << std::endl;
+				engine.clearPrimesPos();
 			}
-			else
+			if (mode < 0)
 			{
 				engine.generatePrimesNeg(_globalWorkSize, i << _log2GlobalWorkSize);
-				// std::cout << engine.readPrimeCount() << " primes" << std::endl;
 				engine.initFactorsNeg(_globalWorkSize);
 				engine.generateFactorsNeg(_globalWorkSize);
-				// std::cout << engine.readFactorCount() << " factors" << std::endl;
+				engine.clearPrimesNeg();
 			}
-			engine.clearPrimes();
 
 			++cnt; ++j;
 
@@ -424,7 +424,7 @@ public:
 			}
 		}
 
-		// engine.displayProfiles(1);
+		engine.displayProfiles(1);
 		clearEngine(engine);
 
 		return true;
