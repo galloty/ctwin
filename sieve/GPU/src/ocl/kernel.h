@@ -57,7 +57,7 @@ static const char * const src_ocl_kernel = \
 "}\n" \
 "\n" \
 "// Montgomery form of 2^64 is (2^64)^2\n" \
-"inline uint64 two_pow_64(const uint64 p, const uint64 q, const uint64 one)\n" \
+"/*inline uint64 two_pow_64(const uint64 p, const uint64 q, const uint64 one)\n" \
 "{\n" \
 "	uint64 t = add_mod(one, one, p); t = add_mod(t, t, p);		// 4\n" \
 "	t = add_mod(t, t, p); t = add_mod(t, t, p);					// 16\n" \
@@ -69,7 +69,7 @@ static const char * const src_ocl_kernel = \
 "{\n" \
 "	const uint64 r2 = two_pow_64(p, q, one);\n" \
 "	return mul_mod(n, r2, p, q);\n" \
-"}\n" \
+"}*/\n" \
 "\n" \
 "inline uint64 toInt(const uint64 r, const uint64 p, const uint64 q)\n" \
 "{\n" \
@@ -155,7 +155,7 @@ static const char * const src_ocl_kernel = \
 "{\n" \
 "	if ((a == 0) || (a == one)) return a;\n" \
 "\n" \
-"	uint64 d = 2, md = add_mod(one, one, p), ai = p - toInt(a, p, q);\n" \
+"	uint32 d = 2; uint64 md = add_mod(one, one, p), ai = p - toInt(a, p, q);\n" \
 "	while (d < 256)\n" \
 "	{\n" \
 "		if (jacobi(d * d + ai, p) == -1) break;\n" \
@@ -175,6 +175,45 @@ static const char * const src_ocl_kernel = \
 "	}\n" \
 "\n" \
 "	return ((mul_mod(x, x, p, q) == a) ? x : 0);\n" \
+"}\n" \
+"\n" \
+"inline uint64 sqrtn_3_4(const uint64 a, const uint32 n, const uint64 p, const uint64 q)\n" \
+"{\n" \
+"	uint64 r = a, k = (p - 1) / 2, m = 1;\n" \
+"	for (uint32 i = 1; i <= n; ++i)\n" \
+"	{\n" \
+"		if (m % 2 != 0) m += k;\n" \
+"		m /= 2;\n" \
+"	}\n" \
+"	if (m > 1) r = pow_mod(r, m, p, q);\n" \
+"\n" \
+"	return r;\n" \
+"}\n" \
+"\n" \
+"inline uint64 sqrtn_5_8(const uint64 a, const uint32 n, const uint64 p, const uint64 q, const uint64 one)\n" \
+"{\n" \
+"	uint32 e = 1; for (uint64 k = (p - 1) / 2; k % 2 == 0; k /= 2) ++e;\n" \
+"	e = min(e, n);\n" \
+"	if ((e > 1) && pow_mod(a, (p - 1) >> e, p, q) != one) return 0;\n" \
+"\n" \
+"	uint64 r = a, k = (p - 1) / 2, m = 1;\n" \
+"	for (uint32 i = 1; i <= n; ++i)\n" \
+"	{\n" \
+"		if (k % 2 == 0)\n" \
+"		{\n" \
+"			r = sqrt_mod_5_8(r, p, q, one);\n" \
+"			k /= 2;\n" \
+"			if (r == 0) break;\n" \
+"		}\n" \
+"		else\n" \
+"		{\n" \
+"			if (m % 2 != 0) m += k;\n" \
+"			m /= 2;\n" \
+"		}\n" \
+"	}\n" \
+"	if (m > 1) r = pow_mod(r, m, p, q);\n" \
+"\n" \
+"	return r;\n" \
 "}\n" \
 "\n" \
 "inline uint64 sqrtn(const uint64 a, const uint32 n, const uint64 p, const uint64 q, const uint64 one)\n" \
@@ -259,6 +298,7 @@ static const char * const src_ocl_kernel = \
 "\n" \
 "	ext_vector[i] = (a < 256) ? pow_mod(ma, pm1_6 >> (g_n - 1), p, q) : (ulong)(0);\n" \
 "}\n" \
+"\n" \
 "__kernel\n" \
 "void generate_factors_pos(__global const uint * restrict const prime_count, __global const ulong2 * restrict const prime_vector,\n" \
 "	__global const ulong * restrict const ext_vector, __global uint * restrict const factor_count, __global ulong2 * restrict const factor)\n" \
@@ -300,6 +340,7 @@ static const char * const src_ocl_kernel = \
 "__kernel\n" \
 "void generate_primes_neg(__global uint * restrict const prime_count, __global ulong2 * restrict const prime_vector, __global ulong2 * restrict const ext_vector,\n" \
 "	__global uint * restrict const prime_3_4_count, __global ulong2 * restrict const prime_3_4_vector, __global ulong2 * restrict const ext_3_4_vector,\n" \
+"	__global uint * restrict const prime_5_8_count, __global ulong2 * restrict const prime_5_8_vector, __global ulong2 * restrict const ext_5_8_vector,\n" \
 "	const ulong index)\n" \
 "{\n" \
 "	const uint64 k = index | get_global_id(0);\n" \
@@ -314,6 +355,12 @@ static const char * const src_ocl_kernel = \
 "				const uint prime_index = atomic_inc(prime_3_4_count);\n" \
 "				prime_3_4_vector[prime_index] = (ulong2)(p, q);\n" \
 "				ext_3_4_vector[prime_index] = (ulong2)(one, 0);\n" \
+"			}\n" \
+"			else if (p % 8 == 5)\n" \
+"			{\n" \
+"				const uint prime_index = atomic_inc(prime_5_8_count);\n" \
+"				prime_5_8_vector[prime_index] = (ulong2)(p, q);\n" \
+"				ext_5_8_vector[prime_index] = (ulong2)(one, 0);\n" \
 "			}\n" \
 "			else\n" \
 "			{\n" \
@@ -341,8 +388,28 @@ static const char * const src_ocl_kernel = \
 "	const uint64 r = half_mod(sub_mod(one, s5, p), p);\n" \
 "	const bool is_square = (jacobi(toInt(r, p, q), p) == 1);\n" \
 "	const uint64 rs = is_square ? r : sub_mod(one, r, p);\n" \
-"	const uint64 sn = sqrtn(rs, g_n - 1, p, q, one);\n" \
+"	const uint64 sn = sqrtn_3_4(rs, g_n - 1, p, q);\n" \
 "	ext_3_4_vector[i] = (ulong2)(sn, 0);\n" \
+"}\n" \
+"\n" \
+"__kernel\n" \
+"void init_5_8_factors_neg(__global const uint * restrict const prime_5_8_count, __global const ulong2 * restrict const prime_5_8_vector,\n" \
+"	__global ulong2 * restrict const ext_5_8_vector)\n" \
+"{\n" \
+"	const size_t i = get_global_id(0);\n" \
+"	if (i >= *prime_5_8_count) return;\n" \
+"\n" \
+"	const uint64 p = prime_5_8_vector[i].s0, q = prime_5_8_vector[i].s1;\n" \
+"	const uint64 one = ext_5_8_vector[i].s0, two = add_mod(one, one, p), five = add_mod(add_mod(two, two, p), one, p);\n" \
+"\n" \
+"	const uint64 s5 = sqrt_mod_5_8(five, p, q, one);\n" \
+"	if (s5 == 0) { ext_5_8_vector[i] = (ulong2)(0, 0); return; }\n" \
+"\n" \
+"	const uint64 r = half_mod(sub_mod(one, s5, p), p);\n" \
+"	if (jacobi(toInt(r, p, q), p) != 1) { ext_5_8_vector[i] = (ulong2)(0, 0); return; }\n" \
+"	const uint64 sn1 = sqrtn_5_8(r, g_n - 1, p, q, one);\n" \
+"	const uint64 sn2 = sqrtn_5_8(sub_mod(one, r, p), g_n - 1, p, q, one);\n" \
+"	ext_5_8_vector[i] = (ulong2)(sn1, sn2);\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
@@ -359,46 +426,38 @@ static const char * const src_ocl_kernel = \
 "	if (s5 == 0) { ext_vector[i] = (ulong2)(0, 0); return; }\n" \
 "\n" \
 "	const uint64 r = half_mod(sub_mod(one, s5, p), p);\n" \
-"	const bool is_square = (jacobi(toInt(r, p, q), p) == 1);\n" \
-"	/*if (p % 4 == 3)\n" \
-"	{\n" \
-"		const uint64 rs = is_square ? r : sub_mod(one, r, p);\n" \
-"		const uint64 sn = sqrtn(rs, g_n - 1, p, q, one);\n" \
-"		ext_vector[i] = (ulong2)(sn, 0);\n" \
-"	}\n" \
-"	else*/ if (is_square)\n" \
-"	{\n" \
-"		const uint64 sn1 = sqrtn(r, g_n - 1, p, q, one);\n" \
-"		const uint64 sn2 = sqrtn(sub_mod(one, r, p), g_n - 1, p, q, one);\n" \
-"		ext_vector[i] = (ulong2)(sn1, sn2);\n" \
-"	}\n" \
-"	else ext_vector[i] = (ulong2)(0, 0);\n" \
+"	if (jacobi(toInt(r, p, q), p) != 1) { ext_vector[i] = (ulong2)(0, 0); return; }\n" \
+"	const uint64 sn1 = sqrtn(r, g_n - 1, p, q, one);\n" \
+"	const uint64 sn2 = sqrtn(sub_mod(one, r, p), g_n - 1, p, q, one);\n" \
+"	ext_vector[i] = (ulong2)(sn1, sn2);\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
 "void generate_factors_neg(__global const uint * restrict const prime_count, __global const ulong2 * restrict const prime_vector,\n" \
-"	__global const ulong2 * restrict const ext_vector, __global const char * restrict const kro_vector,\n" \
-"	__global uint * restrict const factor_count, __global ulong2 * restrict const factor)\n" \
+"	__global const ulong2 * restrict const ext_vector, __global uint * restrict const factor_count, __global ulong2 * restrict const factor)\n" \
 "{\n" \
 "	const size_t i = get_global_id(0);\n" \
 "	if (i >= *prime_count) return;\n" \
 "\n" \
 "	uint64 r1 = ext_vector[i].s0, r2 = ext_vector[i].s1;\n" \
 "\n" \
-"	const uint64 p = prime_vector[i].s0, q = prime_vector[i].s1;\n" \
+"	const uint64 p = prime_vector[i].s0, q = prime_vector[i].s1, one = (-p) % p;\n" \
 "\n" \
-"	const uint64 bMax = 2 * 1000000000ul;	// (p < 10000000000000000ul) ? 5 * 1000000000ul : 10 * 1000000000ul;\n" \
+"	const uint64 bMax = (p < 10000000000000000ul) ? 5 * 1000000000ul : 10 * 1000000000ul;\n" \
 "\n" \
 "	// u is a primitive (2^e)th root of unity\n" \
 "	uint32 e = 1; for (uint64 k = (p - 1) / 2; k % 2 == 0; k /= 2) ++e;\n" \
 "	e = min(e, (uint32)(g_n - 1));\n" \
-"	uint64 u = 2;\n" \
-"	while (true)\n" \
+"\n" \
+"	uint32 d = 2; uint64 md = add_mod(one, one, p);\n" \
+"	while (d < 256)\n" \
 "	{\n" \
-"		if (jacobi(u, p) == -1) break;\n" \
-"		++u; if ((u == 4) || (u == 9)) ++u;\n" \
+"		if (jacobi(d, p) == -1) break;\n" \
+"		++d; md = add_mod(md, one, p); if ((d == 4) || (d == 9)) { ++d; md = add_mod(md, one, p); }\n" \
 "	}\n" \
-"	u = pow_mod(toMp(u, p, q, e), (p - 1) >> e, p, q);\n" \
+"	if (d >= 256) return;\n" \
+"\n" \
+"	const uint64 u = pow_mod(md, (p - 1) >> e, p, q);\n" \
 "\n" \
 "	if (r1 != 0)\n" \
 "	{\n" \
@@ -424,9 +483,10 @@ static const char * const src_ocl_kernel = \
 "}\n" \
 "\n" \
 "__kernel\n" \
-"void clear_primes_neg(__global uint * restrict const prime_count, __global uint * restrict const _prime_3_4_count)\n" \
+"void clear_primes_neg(__global uint * restrict const prime_count, __global uint * restrict const _prime_3_4_count, __global uint * restrict const _prime_5_8_count)\n" \
 "{\n" \
 "	*prime_count = 0;\n" \
 "	*_prime_3_4_count = 0;\n" \
+"	*_prime_5_8_count = 0;\n" \
 "}\n" \
 "";

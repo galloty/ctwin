@@ -341,7 +341,7 @@ public:
 		}
 
 		initEngine(engine, _log2GlobalWorkSize, kro.data(), mode);
-		engine.setProfiling(true);
+		// engine.setProfiling(true);
 
 		const double f = (mode == 1)
 			? 1.0 / (3ull << (_log2GlobalWorkSize + n))
@@ -424,7 +424,7 @@ public:
 			}
 		}
 
-		engine.displayProfiles(1);
+		// engine.displayProfiles(1);
 		clearEngine(engine);
 
 		return true;

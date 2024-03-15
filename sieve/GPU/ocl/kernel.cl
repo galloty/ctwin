@@ -45,7 +45,7 @@ inline uint64 mul_mod(const uint64 a, const uint64 b, const uint64 p, const uint
 }
 
 // Montgomery form of 2^64 is (2^64)^2
-inline uint64 two_pow_64(const uint64 p, const uint64 q, const uint64 one)
+/*inline uint64 two_pow_64(const uint64 p, const uint64 q, const uint64 one)
 {
 	uint64 t = add_mod(one, one, p); t = add_mod(t, t, p);		// 4
 	t = add_mod(t, t, p); t = add_mod(t, t, p);					// 16
@@ -57,7 +57,7 @@ inline uint64 toMp(const uint64 n, const uint64 p, const uint64 q, const uint64 
 {
 	const uint64 r2 = two_pow_64(p, q, one);
 	return mul_mod(n, r2, p, q);
-}
+}*/
 
 inline uint64 toInt(const uint64 r, const uint64 p, const uint64 q)
 {
@@ -143,7 +143,7 @@ inline uint64 sqrt_mod(const uint64 a, const uint64 p, const uint64 q, const uin
 {
 	if ((a == 0) || (a == one)) return a;
 
-	uint64 d = 2, md = add_mod(one, one, p), ai = p - toInt(a, p, q);
+	uint32 d = 2; uint64 md = add_mod(one, one, p), ai = p - toInt(a, p, q);
 	while (d < 256)
 	{
 		if (jacobi(d * d + ai, p) == -1) break;
@@ -163,6 +163,45 @@ inline uint64 sqrt_mod(const uint64 a, const uint64 p, const uint64 q, const uin
 	}
 
 	return ((mul_mod(x, x, p, q) == a) ? x : 0);
+}
+
+inline uint64 sqrtn_3_4(const uint64 a, const uint32 n, const uint64 p, const uint64 q)
+{
+	uint64 r = a, k = (p - 1) / 2, m = 1;
+	for (uint32 i = 1; i <= n; ++i)
+	{
+		if (m % 2 != 0) m += k;
+		m /= 2;
+	}
+	if (m > 1) r = pow_mod(r, m, p, q);
+
+	return r;
+}
+
+inline uint64 sqrtn_5_8(const uint64 a, const uint32 n, const uint64 p, const uint64 q, const uint64 one)
+{
+	uint32 e = 1; for (uint64 k = (p - 1) / 2; k % 2 == 0; k /= 2) ++e;
+	e = min(e, n);
+	if ((e > 1) && pow_mod(a, (p - 1) >> e, p, q) != one) return 0;
+
+	uint64 r = a, k = (p - 1) / 2, m = 1;
+	for (uint32 i = 1; i <= n; ++i)
+	{
+		if (k % 2 == 0)
+		{
+			r = sqrt_mod_5_8(r, p, q, one);
+			k /= 2;
+			if (r == 0) break;
+		}
+		else
+		{
+			if (m % 2 != 0) m += k;
+			m /= 2;
+		}
+	}
+	if (m > 1) r = pow_mod(r, m, p, q);
+
+	return r;
 }
 
 inline uint64 sqrtn(const uint64 a, const uint32 n, const uint64 p, const uint64 q, const uint64 one)
@@ -289,6 +328,7 @@ void clear_primes_pos(__global uint * restrict const prime_count)
 __kernel
 void generate_primes_neg(__global uint * restrict const prime_count, __global ulong2 * restrict const prime_vector, __global ulong2 * restrict const ext_vector,
 	__global uint * restrict const prime_3_4_count, __global ulong2 * restrict const prime_3_4_vector, __global ulong2 * restrict const ext_3_4_vector,
+	__global uint * restrict const prime_5_8_count, __global ulong2 * restrict const prime_5_8_vector, __global ulong2 * restrict const ext_5_8_vector,
 	const ulong index)
 {
 	const uint64 k = index | get_global_id(0);
@@ -303,6 +343,12 @@ void generate_primes_neg(__global uint * restrict const prime_count, __global ul
 				const uint prime_index = atomic_inc(prime_3_4_count);
 				prime_3_4_vector[prime_index] = (ulong2)(p, q);
 				ext_3_4_vector[prime_index] = (ulong2)(one, 0);
+			}
+			else if (p % 8 == 5)
+			{
+				const uint prime_index = atomic_inc(prime_5_8_count);
+				prime_5_8_vector[prime_index] = (ulong2)(p, q);
+				ext_5_8_vector[prime_index] = (ulong2)(one, 0);
 			}
 			else
 			{
@@ -330,8 +376,28 @@ void init_3_4_factors_neg(__global const uint * restrict const prime_3_4_count, 
 	const uint64 r = half_mod(sub_mod(one, s5, p), p);
 	const bool is_square = (jacobi(toInt(r, p, q), p) == 1);
 	const uint64 rs = is_square ? r : sub_mod(one, r, p);
-	const uint64 sn = sqrtn(rs, g_n - 1, p, q, one);
+	const uint64 sn = sqrtn_3_4(rs, g_n - 1, p, q);
 	ext_3_4_vector[i] = (ulong2)(sn, 0);
+}
+
+__kernel
+void init_5_8_factors_neg(__global const uint * restrict const prime_5_8_count, __global const ulong2 * restrict const prime_5_8_vector,
+	__global ulong2 * restrict const ext_5_8_vector)
+{
+	const size_t i = get_global_id(0);
+	if (i >= *prime_5_8_count) return;
+
+	const uint64 p = prime_5_8_vector[i].s0, q = prime_5_8_vector[i].s1;
+	const uint64 one = ext_5_8_vector[i].s0, two = add_mod(one, one, p), five = add_mod(add_mod(two, two, p), one, p);
+
+	const uint64 s5 = sqrt_mod_5_8(five, p, q, one);
+	if (s5 == 0) { ext_5_8_vector[i] = (ulong2)(0, 0); return; }
+
+	const uint64 r = half_mod(sub_mod(one, s5, p), p);
+	if (jacobi(toInt(r, p, q), p) != 1) { ext_5_8_vector[i] = (ulong2)(0, 0); return; }
+	const uint64 sn1 = sqrtn_5_8(r, g_n - 1, p, q, one);
+	const uint64 sn2 = sqrtn_5_8(sub_mod(one, r, p), g_n - 1, p, q, one);
+	ext_5_8_vector[i] = (ulong2)(sn1, sn2);
 }
 
 __kernel
@@ -348,46 +414,38 @@ void init_factors_neg(__global const uint * restrict const prime_count, __global
 	if (s5 == 0) { ext_vector[i] = (ulong2)(0, 0); return; }
 
 	const uint64 r = half_mod(sub_mod(one, s5, p), p);
-	const bool is_square = (jacobi(toInt(r, p, q), p) == 1);
-	/*if (p % 4 == 3)
-	{
-		const uint64 rs = is_square ? r : sub_mod(one, r, p);
-		const uint64 sn = sqrtn(rs, g_n - 1, p, q, one);
-		ext_vector[i] = (ulong2)(sn, 0);
-	}
-	else*/ if (is_square)
-	{
-		const uint64 sn1 = sqrtn(r, g_n - 1, p, q, one);
-		const uint64 sn2 = sqrtn(sub_mod(one, r, p), g_n - 1, p, q, one);
-		ext_vector[i] = (ulong2)(sn1, sn2);
-	}
-	else ext_vector[i] = (ulong2)(0, 0);
+	if (jacobi(toInt(r, p, q), p) != 1) { ext_vector[i] = (ulong2)(0, 0); return; }
+	const uint64 sn1 = sqrtn(r, g_n - 1, p, q, one);
+	const uint64 sn2 = sqrtn(sub_mod(one, r, p), g_n - 1, p, q, one);
+	ext_vector[i] = (ulong2)(sn1, sn2);
 }
 
 __kernel
 void generate_factors_neg(__global const uint * restrict const prime_count, __global const ulong2 * restrict const prime_vector,
-	__global const ulong2 * restrict const ext_vector, __global const char * restrict const kro_vector,
-	__global uint * restrict const factor_count, __global ulong2 * restrict const factor)
+	__global const ulong2 * restrict const ext_vector, __global uint * restrict const factor_count, __global ulong2 * restrict const factor)
 {
 	const size_t i = get_global_id(0);
 	if (i >= *prime_count) return;
 
 	uint64 r1 = ext_vector[i].s0, r2 = ext_vector[i].s1;
 
-	const uint64 p = prime_vector[i].s0, q = prime_vector[i].s1;
+	const uint64 p = prime_vector[i].s0, q = prime_vector[i].s1, one = (-p) % p;
 
-	const uint64 bMax = 2 * 1000000000ul;	// (p < 10000000000000000ul) ? 5 * 1000000000ul : 10 * 1000000000ul;
+	const uint64 bMax = (p < 10000000000000000ul) ? 5 * 1000000000ul : 10 * 1000000000ul;
 
 	// u is a primitive (2^e)th root of unity
 	uint32 e = 1; for (uint64 k = (p - 1) / 2; k % 2 == 0; k /= 2) ++e;
 	e = min(e, (uint32)(g_n - 1));
-	uint64 u = 2;
-	while (true)
+
+	uint32 d = 2; uint64 md = add_mod(one, one, p);
+	while (d < 256)
 	{
-		if (jacobi(u, p) == -1) break;
-		++u; if ((u == 4) || (u == 9)) ++u;
+		if (jacobi(d, p) == -1) break;
+		++d; md = add_mod(md, one, p); if ((d == 4) || (d == 9)) { ++d; md = add_mod(md, one, p); }
 	}
-	u = pow_mod(toMp(u, p, q, e), (p - 1) >> e, p, q);
+	if (d >= 256) return;
+
+	const uint64 u = pow_mod(md, (p - 1) >> e, p, q);
 
 	if (r1 != 0)
 	{
@@ -413,8 +471,9 @@ void generate_factors_neg(__global const uint * restrict const prime_count, __gl
 }
 
 __kernel
-void clear_primes_neg(__global uint * restrict const prime_count, __global uint * restrict const _prime_3_4_count)
+void clear_primes_neg(__global uint * restrict const prime_count, __global uint * restrict const _prime_3_4_count, __global uint * restrict const _prime_5_8_count)
 {
 	*prime_count = 0;
 	*_prime_3_4_count = 0;
+	*_prime_5_8_count = 0;
 }

@@ -118,7 +118,7 @@ public:
 		platform.displayDevices();
 
 		int n = 14, mode = -1, d = 0;
-		const uint64_t p_min = (mode == 1) ? 1 * PETA : 1 * TERA, p_max = p_min + ((mode == 1) ? 10 * TERA : 1 * GIGA);
+		const uint64_t p_min = (mode == 1) ? 1 * PETA : 1 * TERA, p_max = p_min + ((mode == 1) ? 10 * TERA : 10 * GIGA);
 
 		// if (args.size() < 4)
 		// {
