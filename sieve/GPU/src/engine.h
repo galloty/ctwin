@@ -13,7 +13,7 @@ class engine : public device
 {
 private:
 	cl_mem _kro_vector = nullptr;
-	cl_mem _prime_vector = nullptr, _prime_3_4_vector, _prime_5_8_vector;
+	cl_mem _prime_vector = nullptr, _prime_3_4_vector = nullptr, _prime_5_8_vector = nullptr;
 	cl_mem _ext_vector = nullptr, _ext_3_4_vector = nullptr, _ext_5_8_vector = nullptr;
 	cl_mem _factor_vector = nullptr;
 	cl_mem _prime_count = nullptr, _prime_3_4_count = nullptr, _prime_5_8_count = nullptr, _factor_count = nullptr;
