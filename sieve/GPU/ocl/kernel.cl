@@ -431,7 +431,7 @@ void generate_factors_neg(__global const uint * restrict const prime_count, __gl
 
 	const uint64 p = prime_vector[i].s0, q = prime_vector[i].s1, one = (-p) % p;
 
-	const uint64 bMax = (p < 10000000000000000ul) ? 5 * 1000000000ul : 10 * 1000000000ul;
+	const uint64 bMax = (p < 10000000000000ul) ? 5 * 1000000000ul : 10 * 1000000000ul;
 
 	// u is a primitive (2^e)th root of unity
 	uint32 e = 1; for (uint64 k = (p - 1) / 2; k % 2 == 0; k /= 2) ++e;

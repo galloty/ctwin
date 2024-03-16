@@ -443,7 +443,7 @@ static const char * const src_ocl_kernel = \
 "\n" \
 "	const uint64 p = prime_vector[i].s0, q = prime_vector[i].s1, one = (-p) % p;\n" \
 "\n" \
-"	const uint64 bMax = (p < 10000000000000000ul) ? 5 * 1000000000ul : 10 * 1000000000ul;\n" \
+"	const uint64 bMax = (p < 10000000000000ul) ? 5 * 1000000000ul : 10 * 1000000000ul;\n" \
 "\n" \
 "	// u is a primitive (2^e)th root of unity\n" \
 "	uint32 e = 1; for (uint64 k = (p - 1) / 2; k % 2 == 0; k /= 2) ++e;\n" \

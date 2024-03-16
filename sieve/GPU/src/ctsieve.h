@@ -326,7 +326,7 @@ public:
 	bool check(engine & engine, const int n, const uint64_t p_min, const uint64_t p_max, const int mode)
 	{
 		_n = n;
-		const uint64_t scale = (mode == 1) ? TERA : GIGA;
+		const uint64_t scale = TERA;	// (mode == 1) ? TERA : GIGA;
 		std::stringstream ss; ss << n << "_" << (p_min / scale) << "_" << (p_max / scale) << ".txt";
 		_extension = ss.str();
 
