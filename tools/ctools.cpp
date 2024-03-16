@@ -130,7 +130,7 @@ static std::string header()
 	return ss.str();
 }
 
-int expected(const int n, const uint64_t b_size, const double p_max_pos, const double p_max_neg)
+inline int expected(const int n, const uint64_t b_size, const double p_max_pos, const double p_max_neg)
 {
 	static const double C_p[21] = { 0, 2.2415, 4.6432, 8.0257, 7.6388, 6.1913, 6.9476, 10.2327, 10.3762, 14.1587, 14.6623, 14.5833,
 		12.0591, 20.4282, 20.0690, 23.1395, 20.7106, 18.7258, 17.8171, 29.1380, 30.2934 };
@@ -142,11 +142,12 @@ int expected(const int n, const uint64_t b_size, const double p_max_pos, const d
 
 inline void read_cand(const int n, const uint64_t b_min, const uint64_t b_max, const double p_max_pos, const double p_max_neg, std::set<uint64_t> & cand)
 {
-	std::stringstream ss; ss << "data/cand_" << n << "_" << b_min << "_" << b_max << ".txt";
-	const std::string filename = ss.str();
+	// std::stringstream ss; ss << "cand_" << n << "_" << b_min << "_" << b_max << ".txt";
+	// const std::string filename = ss.str();
+	const std::string filename = "cand_14_2_2000000000_1.003P_1.001T.txt";
 
 	std::cout << "Reading '" << filename << "'... " << std::flush;
-	std::ifstream cand_file(filename);
+	std::ifstream cand_file(std::string("data/") + filename);
 
 	char * const buffer = new char[1 << 28];
 	cand_file.rdbuf()->pubsetbuf(buffer, sizeof(buffer));
@@ -170,13 +171,14 @@ inline void read_cand(const int n, const uint64_t b_min, const uint64_t b_max, c
 	delete[] buffer;
 }
 
-inline void read_factor_pos(const int n, const uint64_t b_size, const uint64_t p_min, const uint64_t p_max, const double p_max_neg, std::set<uint64_t> & cand)
+inline void read_factor_pos(const int n, const uint64_t b_min, const uint64_t b_max, const uint64_t p_min, const uint64_t p_max,
+	const double p_max_neg, std::set<uint64_t> & cand, const size_t cand_count)
 {
-	std::stringstream ss; ss << "data/fp" << n << "_" << p_min << "_" << p_max << ".txt";
+	std::stringstream ss; ss << "fp" << n << "_" << p_min << "_" << p_max << ".txt";
 	const std::string filename = ss.str();
 
 	std::cout << "Reading '" << filename << "'... " << std::flush;
-	std::ifstream factor_file(filename);
+	std::ifstream factor_file(std::string("data/") + filename);
 
 	char * const buffer = new char[1 << 28];
 	factor_file.rdbuf()->pubsetbuf(buffer, sizeof(buffer));
@@ -190,18 +192,22 @@ inline void read_factor_pos(const int n, const uint64_t b_size, const uint64_t p
 			factor_file >> p >> b;
 			if ((p != p_prev) || (b != b_prev))
 			{
-				const MpArith mp(p);
-				const uint64_t x = mp.pow(mp.toMp(b), 1 << (n - 1)), r = mp.sub(mp.mul(x, x), x);
-				if (r != p - mp.one()) std::cerr << "Bad divisor: " << p << ", " << b << std::endl;
-				else { cand.erase(b); ++count; }
+				if ((b_min <= b) && (b <= b_max))
+				{
+					const MpArith mp(p);
+					const uint64_t x = mp.pow(mp.toMp(b), 1 << (n - 1)), r = mp.sub(mp.mul(x, x), x);
+					if (r != p - mp.one()) std::cerr << "Bad divisor: " << p << ", " << b << std::endl;
+					else { cand.erase(b); ++count; }
+				}
 			}
 			// else std::cout << "Error: " << p << ", " << b << std::endl;
 			p_prev = p; b_prev = b;
 		}
 		factor_file.close();
 	}
-	const int cand_exp = expected(n, b_size, p_max * 1e12, p_max_neg);
-	std::cout << count << " factors, " << cand.size() <<  " remaining candidates, " << cand_exp << " expected." << std::endl;
+	const double percent = cand.size() / double(cand_count);
+	const int cand_exp = expected(n, b_max - b_min, p_max * 1e12, p_max_neg);
+	std::cout << count << " factors, " << cand.size() <<  " remaining candidates (" << 100.0 * percent << "%), " << cand_exp << " expected." << std::endl;
 
 	delete[] buffer;
 }
@@ -261,19 +267,60 @@ int main(/*int argc, char * argv[]*/)
 {
 	std::cout << header();
 
-	const int n = 13;
-	const uint64_t b_min = 2, b_max = 2000000000ull, b_size = b_max - b_min;
-	const double p_max_pos = 561e12, p_max_neg = 1.633e12;
+	// const int f = 1; //double f = 100 / 2e9;
+	// std::cout <<     "1, " << expected(14, 2000000000ull, 1*1e15, 10e12) * f << std::endl;
+	// std::cout <<    "10, " << expected(14, 2000000000ull, 10*1e15, 10e12) * f << std::endl;
+	// std::cout <<   "100, " << expected(14, 2000000000ull, 100*1e15, 10e12) * f << std::endl;
+	// std::cout <<  "1000, " << expected(14, 2000000000ull, 1000*1e15, 10e12) * f << std::endl;
+	// std::cout << "10000, " << expected(14, 2000000000ull, 10000*1e15, 10e12) * f << std::endl;
+	// std::cout << "18446, " << expected(14, 2000000000ull, 18446*1e15, 10e12) * f << std::endl;
+	// std::cout << "18446*, " << expected(14, 2000000000ull, 18446*1e15, 1e15) * f << std::endl;
+	// return EXIT_SUCCESS;
+
+	const int n = 14;
+	const uint64_t b_min = 2, b_max = 2000000000ull;
+	const double p_max_pos = 1.003e15, p_max_neg = 1.001e12;
+	// const double p_max_pos = 1.064e15, p_max_neg = 14.08e12;
+
+	std::cout << std::fixed << std::setprecision(2);
 
 	std::set<uint64_t> cand;
 	read_cand(n, b_min, b_max, p_max_pos, p_max_neg, cand);
+	const size_t count = cand.size();
 
-	read_factor_pos(n, b_size, 1000, 2000, p_max_neg, cand);
-	read_factor_pos(n, b_size, 100000, 200000, p_max_neg, cand);
+	read_factor_pos(n, b_min, b_max, 1000, 2000, p_max_neg, cand, count);
+	read_factor_pos(n, b_min, b_max, 2000, 4000, p_max_neg, cand, count);
+	read_factor_pos(n, b_min, b_max, 4000, 7000, p_max_neg, cand, count);
+	read_factor_pos(n, b_min, b_max, 7000, 10000, p_max_neg, cand, count);
+	read_factor_pos(n, b_min, b_max, 10000, 14000, p_max_neg, cand, count);
+	read_factor_pos(n, b_min, b_max, 14000, 20000, p_max_neg, cand, count);
+	read_factor_pos(n, b_min, b_max, 20000, 30000, p_max_neg, cand, count);
+	read_factor_pos(n, b_min, b_max, 30000, 40000, p_max_neg, cand, count);
+	read_factor_pos(n, b_min, b_max, 40000, 60000, p_max_neg, cand, count);
+	read_factor_pos(n, b_min, b_max, 60000, 80000, p_max_neg, cand, count);
+	read_factor_pos(n, b_min, b_max, 80000, 100000, p_max_neg, cand, count);
+	read_factor_pos(n, b_min, b_max, 100000, 150000, p_max_neg, cand, count);
+	read_factor_pos(n, b_min, b_max, 150000, 200000, p_max_neg, cand, count);
+	read_factor_pos(n, b_min, b_max, 200000, 300000, p_max_neg, cand, count);
+	read_factor_pos(n, b_min, b_max, 300000, 400000, p_max_neg, cand, count);
+	read_factor_pos(n, b_min, b_max, 400000, 600000, p_max_neg, cand, count);
+	read_factor_pos(n, b_min, b_max, 600000, 800000, p_max_neg, cand, count);
+	read_factor_pos(n, b_min, b_max, 800000, 1000000, p_max_neg, cand, count);
+	read_factor_pos(n, b_min, b_max, 1000000, 1500000, p_max_neg, cand, count);
+	read_factor_pos(n, b_min, b_max, 1500000, 2000000, p_max_neg, cand, count);
+	read_factor_pos(n, b_min, b_max, 2000000, 3000000, p_max_neg, cand, count);
+	read_factor_pos(n, b_min, b_max, 3000000, 4000000, p_max_neg, cand, count);
+	read_factor_pos(n, b_min, b_max, 4000000, 6000000, p_max_neg, cand, count);
+	read_factor_pos(n, b_min, b_max, 6000000, 8000000, p_max_neg, cand, count);
+	read_factor_pos(n, b_min, b_max, 8000000, 10000000, p_max_neg, cand, count);
+	read_factor_pos(n, b_min, b_max, 10000000, 12000000, p_max_neg, cand, count);
+	read_factor_pos(n, b_min, b_max, 12000000, 14000000, p_max_neg, cand, count);
+	read_factor_pos(n, b_min, b_max, 14000000, 16000000, p_max_neg, cand, count);
+	read_factor_pos(n, b_min, b_max, 16000000, 18446000, p_max_neg, cand, count);
 
-	check_prp(n, cand);
+	// check_prp(n, cand);
 
-	// write_cand("cand_14.txt", cand);
+	write_cand("cand_14.txt", cand);
 
 	return EXIT_SUCCESS;
 }
