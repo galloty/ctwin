@@ -144,11 +144,11 @@ inline void read_cand(const int n, const uint64_t b_min, const uint64_t b_max, c
 {
 	std::cout << "+/- 1P/1T: " << std::flush;
 
-	// std::stringstream ss; ss << "cand_" << n << "_" << b_min << "_" << b_max << ".txt";
-	// const std::string filename = ss.str();
+	// const std::string filename = "cand_14_2_2000000000.txt";
 	const std::string filename = "cand_14_2_2000000000_1.003P_1.001T.txt";
 	// const std::string filename = "cand_14_2_2000000000_1.003P_2.028T.txt";
 	// const std::string filename = "cand_14_2_2000000000_1.003P_5.082T.txt";
+	// const std::string filename = "cand_14_2_2000000000_1.003P_10.00T.txt";
 
 	std::ifstream cand_file(std::string("data/") + filename);
 
@@ -247,33 +247,46 @@ inline void write_cand(const std::string & filename, const std::set<uint64_t> & 
 	std::cout << cand.size() <<  " candidates." << std::endl;
 }
 
-inline void	check_prp(const int n, const std::set<uint64_t> & cand)
+inline void split_cand(const std::string &filename)
 {
-	std::stringstream ss; ss << "data/prp_" << n << ".txt";
-	const std::string filename = ss.str();
-
-	std::cout << "Checking '" << filename << "'... " << std::flush;
-	std::ifstream prp_file(filename);
-
-	size_t count = 0;
-	if (prp_file.is_open())
+	std::vector<uint32_t> cand;
+	std::ifstream cand_file(filename);
+	std::string line;
+	while (std::getline(cand_file, line))
 	{
-		uint64_t b = 0, b_prev = 0;
-		while (prp_file.good())
+		std::istringstream iss(line);
+		uint64_t b;
+		if (!(iss >> b))
 		{
-			prp_file >> b;
-			if (b > b_prev)
-			{
-				if (cand.find(b) == cand.end()) std::cout << "Error: " << b << " not found." << std::endl;
-				++count;
-			}
-			// else std::cout << "Error: " << b << std::endl;
-			b_prev = b;
+			std::cout << "Error" << std::endl;
+			continue;
 		}
-		prp_file.close();
-		std::cout << count <<  " primes.";
-	} else std::cout << "failed.";
-	std::cout << std::endl;
+		cand.push_back(b);
+	}
+	cand_file.close();
+	// std::cout << cand.size() << std::endl;
+
+	std::ofstream out_file;
+	uint64_t i = 0;
+	out_file.open("cfiles/cand14_0_25.txt");
+	const uint64_t size = 25;
+	for (const uint32_t b : cand)
+	{
+		if (b / (size * 1000000) != i)
+		{
+			out_file << b << std::endl;
+			out_file.close();
+			++i;
+			std::ostringstream ss;
+			ss << "cfiles/cand14_" << i * size << "_" << (i + 1) * size << ".txt";
+			out_file.open(ss.str());
+		}
+		if (b > 0)
+			out_file << b << std::endl;
+		if (b > 110 * 1000000)
+			break;
+	}
+	out_file.close();
 }
 
 int main(/*int argc, char * argv[]*/)
@@ -337,7 +350,6 @@ int main(/*int argc, char * argv[]*/)
 	read_factors(-1, n, b_min, b_max, 300, 400, p_max_pos, p_max_neg, cand, count);
 	read_factors(-1, n, b_min, b_max, 400, 600, p_max_pos, p_max_neg, cand, count);
 	read_factors(-1, n, b_min, b_max, 600, 800, p_max_pos, p_max_neg, cand, count);
-
 	read_factors(-1, n, b_min, b_max, 800, 1000, p_max_pos, p_max_neg, cand, count);
 	read_factors(-1, n, b_min, b_max, 1000, 1500, p_max_pos, p_max_neg, cand, count);
 	read_factors(-1, n, b_min, b_max, 1500, 2000, p_max_pos, p_max_neg, cand, count);
@@ -350,9 +362,9 @@ int main(/*int argc, char * argv[]*/)
 	read_factors(-1, n, b_min, b_max, 8000, 9000, p_max_pos, p_max_neg, cand, count);
 	read_factors(-1, n, b_min, b_max, 9000, 10000, p_max_pos, p_max_neg, cand, count);
 
-	// check_prp(n, cand);
-
 	write_cand("cand_14.txt", cand);
+
+	// split_cand("cand_14.txt");
 
 	return EXIT_SUCCESS;
 }
