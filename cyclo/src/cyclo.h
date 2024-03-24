@@ -15,6 +15,7 @@ Please give feedback to the authors if improvement is realized. It is distribute
 
 #include <thread>
 #include <sys/stat.h>
+// #include <filesystem>
 #include <vector>
 
 #include <gmp.h>
@@ -157,6 +158,8 @@ private:
 		}
 
 		std::remove(oldCtxFile.c_str());
+
+		// std::cout << "Saving " << std::filesystem::current_path() << "/" << ctxFile << std::endl;
 
 		struct stat s;
 		if ((stat(ctxFile.c_str(), &s) == 0) && (std::rename(ctxFile.c_str(), oldCtxFile.c_str()) != 0))	// file exists and cannot rename it

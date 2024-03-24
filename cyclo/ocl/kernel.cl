@@ -19,6 +19,7 @@ typedef uint2	uint32_2;
 typedef struct { uint64 s0; uint32 s1; } uint96;
 typedef struct { uint64 s0; int32  s1; } int96;
 
+inline int96 int96_zero() { int96 r; r.s0 = 0; r.s1 = 0; return r; }
 inline int96 int96_set_si(const int64 n) { int96 r; r.s0 = (uint64)n; r.s1 = (n < 0) ? -1 : 0; return r; }
 
 inline uint96 uint96_set(const uint64 s0, const uint32 s1) { uint96 r; r.s0 = s0; r.s1 = s1; return r; }
@@ -85,12 +86,21 @@ inline uint32 _subMod(const uint32 lhs, const uint32 rhs, const uint32 p)
 	return lhs - rhs + c;
 }
 
+// Improved division by invariant integers, Niels Moller and Torbjorn Granlund, Algorithm 4.
+inline uint32 _mulMod(const uint32 lhs, const uint32 rhs, const uint32 p, const uint32 p_inv)
+{
+	const uint64 m = lhs * (uint64)rhs, q = (uint32)(m >> 32) * (uint64)p_inv + m;
+	uint32 r = (uint32)m - (1 + (uint32)(q >> 32)) * p;
+	if (r > (uint32)q) r += p;
+	return (r >= p) ? r - p : r;
+}
+
 // Peter L. Montgomery, Modular multiplication without trial division, Math. Comp.44 (1985), 519–521.
 
 // The Montgomery REDC algorithm
 inline uint32 REDC(const uint64 t, const uint32 p, const uint32 q)
 {
-	const uint32 mp = mul_hi((uint32)(t) * q, p), t_hi = (uint32)(t >> 32), r = t_hi - mp;
+	const uint32 mp = mul_hi((uint32)t * q, p), t_hi = (uint32)(t >> 32), r = t_hi - mp;
 	return (t_hi < mp) ? r + p : r;
 }
 
@@ -103,30 +113,7 @@ inline uint32 REDCshort(const uint32 t, const uint32 p, const uint32 q)
 // Montgomery form (lhs, rhs and output): if 0 <= r < p then f is r * 2^32 mod p
 inline uint32 _mulMonty(const uint32 lhs, const uint32 rhs, const uint32 p, const uint32 q)
 {
-	return REDC(lhs * (uint64)(rhs), p, q);
-}
-
-// Conversion into Montgomery form
-inline uint32 _toMonty(const uint32 n, const uint32 r2, const uint32 p, const uint32 q)
-{
-	// n * (2^32)^2 = (n * 2^32) * (1 * 2^32)
-	return _mulMonty(n, r2, p, q);
-}
-
-// Conversion out of Montgomery form
-inline uint32 _fromMonty(const uint32 n, const uint32 p, const uint32 q)
-{
-	// n = REDC(n * 2^32, 1)
-	return REDCshort(n, p, q);
-}
-
-inline uint32 _mulMod(const uint32 lhs, const uint32 rhs, const uint32 p, const uint32 p_inv)
-{
-	// Improved division by invariant integers, Niels Moller and Torbjorn Granlund, Algorithm 4.
-	const uint64 m = lhs * (uint64)(rhs), q = (m >> 32) * p_inv + m;
-	uint32 r = (uint32)m - (1 + (uint32)(q >> 32)) * p;
-	if (r > (uint32)q) r += p;
-	return (r >= p) ? r - p : r;
+	return REDC(lhs * (uint64)rhs, p, q);
 }
 
 inline uint32 add_P1(const uint32 lhs, const uint32 rhs) { return _addMod(lhs, rhs, P1); }
@@ -137,38 +124,31 @@ inline uint32 sub_P1(const uint32 lhs, const uint32 rhs) { return _subMod(lhs, r
 inline uint32 sub_P2(const uint32 lhs, const uint32 rhs) { return _subMod(lhs, rhs, P2); }
 inline uint32 sub_P3(const uint32 lhs, const uint32 rhs) { return _subMod(lhs, rhs, P3); }
 
+inline uint32 mul_P1(const uint32 lhs, const uint32 rhs) { return _mulMod(lhs, rhs, P1, P1_INV); }
+inline uint32 mul_P2(const uint32 lhs, const uint32 rhs) { return _mulMod(lhs, rhs, P2, P2_INV); }
+inline uint32 mul_P3(const uint32 lhs, const uint32 rhs) { return _mulMod(lhs, rhs, P3, P3_INV); }
+
 // Montgomery form
-inline uint32 mul_P1(const uint32 lhs, const uint32 rhs) { return _mulMonty(lhs, rhs, P1, Q1); }
-inline uint32 mul_P2(const uint32 lhs, const uint32 rhs) { return _mulMonty(lhs, rhs, P2, Q2); }
-inline uint32 mul_P3(const uint32 lhs, const uint32 rhs) { return _mulMonty(lhs, rhs, P3, Q3); }
+inline uint32 mulC_P1(const uint32 lhs, const uint32 rhs) { return _mulMonty(lhs, rhs, P1, Q1); }
+inline uint32 mulC_P2(const uint32 lhs, const uint32 rhs) { return _mulMonty(lhs, rhs, P2, Q2); }
+inline uint32 mulC_P3(const uint32 lhs, const uint32 rhs) { return _mulMonty(lhs, rhs, P3, Q3); }
 
-inline uint32 toMonty_P1(const uint32 lhs) { return _toMonty(lhs, R1, P1, Q1); }
-inline uint32 toMonty_P2(const uint32 lhs) { return _toMonty(lhs, R2, P2, Q2); }
-inline uint32 toMonty_P3(const uint32 lhs) { return _toMonty(lhs, R3, P3, Q3); }
-
-inline uint32 fromMonty_P1(const uint32 lhs) { return _fromMonty(lhs, P1, Q1); }
-inline uint32 fromMonty_P2(const uint32 lhs) { return _fromMonty(lhs, P2, Q2); }
-inline uint32 fromMonty_P3(const uint32 lhs) { return _fromMonty(lhs, P3, Q3); }
-
-// Standard residue class
-inline uint32 mul_P1std(const uint32 lhs, const uint32 rhs) { return _mulMod(lhs, rhs, P1, P1_INV); }
-inline uint32 mul_P2std(const uint32 lhs, const uint32 rhs) { return _mulMod(lhs, rhs, P2, P2_INV); }
-
-inline uint32 seti_P1(const int32 i) { return toMonty_P1((i < 0) ? (uint32)(i + P1) : (uint32)i); }
-inline uint32 seti_P2(const int32 i) { return toMonty_P2((i < 0) ? (uint32)(i + P2) : (uint32)i); }
-inline uint32 seti_P3(const int32 i) { return toMonty_P3((i < 0) ? (uint32)(i + P3) : (uint32)i); }
+inline uint32 seti_P1(const int32 i) { return (i < 0) ? (uint32)(i + P1) : (uint32)i; }
+inline uint32 seti_P2(const int32 i) { return (i < 0) ? (uint32)(i + P2) : (uint32)i; }
+inline uint32 seti_P3(const int32 i) { return (i < 0) ? (uint32)(i + P3) : (uint32)i; }
 
 inline int32 geti_P1(const uint32 n) { return (n > P1 / 2) ? (int32)(n - P1) : (int32)n; }
 
 inline uint32_2 add_P12(const uint32_2 lhs, const uint32_2 rhs) { return (uint32_2)(add_P1(lhs.s0, rhs.s0), add_P2(lhs.s1, rhs.s1)); }
 inline uint32_2 sub_P12(const uint32_2 lhs, const uint32_2 rhs) { return (uint32_2)(sub_P1(lhs.s0, rhs.s0), sub_P2(lhs.s1, rhs.s1)); }
 inline uint32_2 mul_P12(const uint32_2 lhs, const uint32_2 rhs) { return (uint32_2)(mul_P1(lhs.s0, rhs.s0), mul_P2(lhs.s1, rhs.s1)); }
+inline uint32_2 mulC_P12(const uint32_2 lhs, const uint32_2 rhs) { return (uint32_2)(mulC_P1(lhs.s0, rhs.s0), mulC_P2(lhs.s1, rhs.s1)); }
 
 inline static int96 garner3(const uint32 r1, const uint32 r2, const uint32 r3)
 {
-	const uint32 u13 = mul_P1std(sub_P1(r1, r3), InvP3_P1);
-	const uint32 u23 = mul_P2std(sub_P2(r2, r3), InvP3_P2);
-	const uint32 u123 = mul_P1std(sub_P1(u13, u23), InvP2_P1);
+	const uint32 u13 = mulC_P1(sub_P1(r1, r3), InvP3_P1);
+	const uint32 u23 = mulC_P2(sub_P2(r2, r3), InvP3_P2);
+	const uint32 u123 = mulC_P1(sub_P1(u13, u23), InvP2_P1);
 	const uint96 n = uint96_add_64(uint96_mul_64_32(P2P3, u123), u23 * (uint64)P3 + r3);
 	const uint96 P1P2P3 = uint96_set(P1P2P3l, P1P2P3h), P1P2P3_2 = uint96_set(P1P2P3_2l, P1P2P3_2h);
 	const int96 r = uint96_is_greater(n, P1P2P3_2) ? uint96_subi(n, P1P2P3) : uint96_i(n);
@@ -195,36 +175,36 @@ __constant uint64 mask64[64] = {
 
 inline void frwd2_P12(uint32_2 * const u_P12, const uint32_2 w12)
 {
-	const uint32_2 u1w_P12 = mul_P12(u_P12[1], w12);
+	const uint32_2 u1w_P12 = mulC_P12(u_P12[1], w12);
 	u_P12[1] = sub_P12(u_P12[0], u1w_P12); u_P12[0] = add_P12(u_P12[0], u1w_P12);
 }
 inline void frwd2_P3(uint32 * const u_P3, const uint32 w3)
 {
-	const uint32 u1w_P3 = mul_P3(u_P3[1], w3);
+	const uint32 u1w_P3 = mulC_P3(u_P3[1], w3);
 	u_P3[1] = sub_P3(u_P3[0], u1w_P3); u_P3[0] = add_P3(u_P3[0], u1w_P3);
 }
 
 inline void bkwd2_P12(uint32_2 * const u_P12, const uint32_2 wi12)
 {
 	const uint32_2 v1_P12 = sub_P12(u_P12[0], u_P12[1]);
-	u_P12[0] = add_P12(u_P12[0], u_P12[1]); u_P12[1] = mul_P12(v1_P12, wi12);
+	u_P12[0] = add_P12(u_P12[0], u_P12[1]); u_P12[1] = mulC_P12(v1_P12, wi12);
 }
 inline void bkwd2_P3(uint32 * const u_P3, const uint32 wi3)
 {
 	const uint32 v1_P3 = sub_P3(u_P3[0], u_P3[1]);
-	u_P3[0] = add_P3(u_P3[0], u_P3[1]); u_P3[1] = mul_P3(v1_P3, wi3);
+	u_P3[0] = add_P3(u_P3[0], u_P3[1]); u_P3[1] = mulC_P3(v1_P3, wi3);
 }
 
 inline void sqr2_P12(uint32_2 * const u_P12, const uint32_2 w12)
 {
-	const uint32_2 u1w_P12 = mul_P12(u_P12[1], w12);
+	const uint32_2 u1w_P12 = mulC_P12(u_P12[1], w12);
 	const uint32_2 v0_P12 = add_P12(mul_P12(u_P12[0], u_P12[0]), mul_P12(u1w_P12, u1w_P12));
 	const uint32_2 v1_P12 = mul_P12(add_P12(u_P12[0], u_P12[0]), u_P12[1]);
 	u_P12[0] = add_P12(v0_P12, v0_P12); u_P12[1] = add_P12(v1_P12, v1_P12);
 }
 inline void sqr2_P3(uint32 * const u_P3, const uint32 w3)
 {
-	const uint32 u1w_P3 = mul_P3(u_P3[1], w3);
+	const uint32 u1w_P3 = mulC_P3(u_P3[1], w3);
 	const uint32 v0_P3 = add_P3(mul_P3(u_P3[0], u_P3[0]), mul_P3(u1w_P3, u1w_P3));
 	const uint32 v1_P3 = mul_P3(add_P3(u_P3[0], u_P3[0]), u_P3[1]);
 	u_P3[0] = add_P3(v0_P3, v0_P3); u_P3[1] = add_P3(v1_P3, v1_P3);
@@ -250,39 +230,39 @@ inline void write2_P3(__global uint32 * const x3, const uint32 * const u_P3, con
 
 inline void frwd41_P12(uint32_2 * const u_P12, const uint32_2 w12_1)
 {
-	const uint32_2 u2w1_P12 = mul_P12(u_P12[2], w12_1), u3w1_P12 = mul_P12(u_P12[3], w12_1);
+	const uint32_2 u2w1_P12 = mulC_P12(u_P12[2], w12_1), u3w1_P12 = mulC_P12(u_P12[3], w12_1);
 	u_P12[2] = sub_P12(u_P12[0], u2w1_P12); u_P12[0] = add_P12(u_P12[0], u2w1_P12);
 	u_P12[3] = sub_P12(u_P12[1], u3w1_P12); u_P12[1] = add_P12(u_P12[1], u3w1_P12);
 }
 inline void frwd41_P3(uint32 * const u_P3, const uint32 w3_1)
 {
-	const uint32 u2w1_P3 = mul_P3(u_P3[2], w3_1), u3w1_P3 = mul_P3(u_P3[3], w3_1);
+	const uint32 u2w1_P3 = mulC_P3(u_P3[2], w3_1), u3w1_P3 = mulC_P3(u_P3[3], w3_1);
 	u_P3[2] = sub_P3(u_P3[0], u2w1_P3); u_P3[0] = add_P3(u_P3[0], u2w1_P3);
 	u_P3[3] = sub_P3(u_P3[1], u3w1_P3); u_P3[1] = add_P3(u_P3[1], u3w1_P3);
 }
 
 inline void frwd41_0_P12(uint32_2 * const u_P12, const uint32_2 w12_1)
 {
-	const uint32_2 u2w1_P12 = mul_P12(u_P12[2], w12_1), u3w1_P12 = mul_P12(u_P12[3], w12_1);
+	const uint32_2 u2w1_P12 = mulC_P12(u_P12[2], w12_1), u3w1_P12 = mulC_P12(u_P12[3], w12_1);
 	u_P12[2] = add_P12(u_P12[2], sub_P12(u_P12[0], u2w1_P12)); u_P12[0] = add_P12(u_P12[0], u2w1_P12);
 	u_P12[3] = add_P12(u_P12[3], sub_P12(u_P12[1], u3w1_P12)); u_P12[1] = add_P12(u_P12[1], u3w1_P12);
 }
 inline void frwd41_0_P3(uint32 * const u_P3, const uint32 w3_1)
 {
-	const uint32 u2w1_P3 = mul_P3(u_P3[2], w3_1), u3w1_P3 = mul_P3(u_P3[3], w3_1);
+	const uint32 u2w1_P3 = mulC_P3(u_P3[2], w3_1), u3w1_P3 = mulC_P3(u_P3[3], w3_1);
 	u_P3[2] = add_P3(u_P3[2], sub_P3(u_P3[0], u2w1_P3)); u_P3[0] = add_P3(u_P3[0], u2w1_P3);
 	u_P3[3] = add_P3(u_P3[3], sub_P3(u_P3[1], u3w1_P3)); u_P3[1] = add_P3(u_P3[1], u3w1_P3);
 }
 
 inline void frwd42_P12(uint32_2 * const u_P12, const uint32_2 w12_2, const uint32_2 w12_3)
 {
-	const uint32_2 u1w2_P12 = mul_P12(u_P12[1], w12_2), u3w3_P12 = mul_P12(u_P12[3], w12_3);
+	const uint32_2 u1w2_P12 = mulC_P12(u_P12[1], w12_2), u3w3_P12 = mulC_P12(u_P12[3], w12_3);
 	u_P12[1] = sub_P12(u_P12[0], u1w2_P12); u_P12[0] = add_P12(u_P12[0], u1w2_P12);
 	u_P12[3] = sub_P12(u_P12[2], u3w3_P12); u_P12[2] = add_P12(u_P12[2], u3w3_P12);
 }
 inline void frwd42_P3(uint32 * const u_P3, const uint32 w3_2, const uint32 w3_3)
 {
-	const uint32 u1w2_P3 = mul_P3(u_P3[1], w3_2), u3w3_P3 = mul_P3(u_P3[3], w3_3);
+	const uint32 u1w2_P3 = mulC_P3(u_P3[1], w3_2), u3w3_P3 = mulC_P3(u_P3[3], w3_3);
 	u_P3[1] = sub_P3(u_P3[0], u1w2_P3); u_P3[0] = add_P3(u_P3[0], u1w2_P3);
 	u_P3[3] = sub_P3(u_P3[2], u3w3_P3); u_P3[2] = add_P3(u_P3[2], u3w3_P3);
 }
@@ -290,51 +270,51 @@ inline void frwd42_P3(uint32 * const u_P3, const uint32 w3_2, const uint32 w3_3)
 inline void bkwd42_P12(uint32_2 * const u_P12, const uint32_2 wi12_2, const uint32_2 wi12_3)
 {
 	const uint32_2 v1_P12 = sub_P12(u_P12[0], u_P12[1]), v3_P12 = sub_P12(u_P12[2], u_P12[3]);
-	u_P12[0] = add_P12(u_P12[0], u_P12[1]); u_P12[1] = mul_P12(v1_P12, wi12_2);
-	u_P12[2] = add_P12(u_P12[2], u_P12[3]); u_P12[3] = mul_P12(v3_P12, wi12_3);
+	u_P12[0] = add_P12(u_P12[0], u_P12[1]); u_P12[1] = mulC_P12(v1_P12, wi12_2);
+	u_P12[2] = add_P12(u_P12[2], u_P12[3]); u_P12[3] = mulC_P12(v3_P12, wi12_3);
 }
 inline void bkwd42_P3(uint32 * const u_P3, const uint32 wi3_2, const uint32 wi3_3)
 {
 	const uint32 v1_P3 = sub_P3(u_P3[0], u_P3[1]), v3_P3 = sub_P3(u_P3[2], u_P3[3]);
-	u_P3[0] = add_P3(u_P3[0], u_P3[1]); u_P3[1] = mul_P3(v1_P3, wi3_2);
-	u_P3[2] = add_P3(u_P3[2], u_P3[3]); u_P3[3] = mul_P3(v3_P3, wi3_3);
+	u_P3[0] = add_P3(u_P3[0], u_P3[1]); u_P3[1] = mulC_P3(v1_P3, wi3_2);
+	u_P3[2] = add_P3(u_P3[2], u_P3[3]); u_P3[3] = mulC_P3(v3_P3, wi3_3);
 }
 
 inline void bkwd41_P12(uint32_2 * const u_P12, const uint32_2 wi12_1)
 {
 	const uint32_2 v2_P12 = sub_P12(u_P12[0], u_P12[2]), v3_P12 = sub_P12(u_P12[1], u_P12[3]);
-	u_P12[0] = add_P12(u_P12[0], u_P12[2]); u_P12[2] = mul_P12(v2_P12, wi12_1);
-	u_P12[1] = add_P12(u_P12[1], u_P12[3]); u_P12[3] = mul_P12(v3_P12, wi12_1);
+	u_P12[0] = add_P12(u_P12[0], u_P12[2]); u_P12[2] = mulC_P12(v2_P12, wi12_1);
+	u_P12[1] = add_P12(u_P12[1], u_P12[3]); u_P12[3] = mulC_P12(v3_P12, wi12_1);
 }
 inline void bkwd41_P3(uint32 * const u_P3, const uint32 wi3_1)
 {
 	const uint32 v2_P3 = sub_P3(u_P3[0], u_P3[2]), v3_P3 = sub_P3(u_P3[1], u_P3[3]);
-	u_P3[0] = add_P3(u_P3[0], u_P3[2]); u_P3[2] = mul_P3(v2_P3, wi3_1);
-	u_P3[1] = add_P3(u_P3[1], u_P3[3]); u_P3[3] = mul_P3(v3_P3, wi3_1);
+	u_P3[0] = add_P3(u_P3[0], u_P3[2]); u_P3[2] = mulC_P3(v2_P3, wi3_1);
+	u_P3[1] = add_P3(u_P3[1], u_P3[3]); u_P3[3] = mulC_P3(v3_P3, wi3_1);
 }
 
 inline void bkwd41_0_P12(uint32_2 * const u_P12, const uint32_2 wi12_0, const uint32_2 wi12_1)
 {
-	const uint32_2 v2_P12 = mul_P12(wi12_0, add_P12(u_P12[0], u_P12[2]));
-	const uint32_2 v3_P12 = mul_P12(wi12_0, add_P12(u_P12[1], u_P12[3]));
-	u_P12[2] = mul_P12(wi12_1, sub_P12(u_P12[2], u_P12[0]));
-	u_P12[0] = mul_P12(wi12_1, sub_P12(u_P12[0], v2_P12));
-	u_P12[3] = mul_P12(wi12_1, sub_P12(u_P12[3], u_P12[1]));
-	u_P12[1] = mul_P12(wi12_1, sub_P12(u_P12[1], v3_P12));
+	const uint32_2 v2_P12 = mulC_P12(add_P12(u_P12[0], u_P12[2]), wi12_0);
+	const uint32_2 v3_P12 = mulC_P12(add_P12(u_P12[1], u_P12[3]), wi12_0);
+	u_P12[2] = mulC_P12(sub_P12(u_P12[2], u_P12[0]), wi12_1);
+	u_P12[0] = mulC_P12(sub_P12(u_P12[0], v2_P12), wi12_1);
+	u_P12[3] = mulC_P12(sub_P12(u_P12[3], u_P12[1]), wi12_1);
+	u_P12[1] = mulC_P12(sub_P12(u_P12[1], v3_P12), wi12_1);
 }
 inline void bkwd41_0_P3(uint32 * const u_P3, const uint32 wi3_0, const uint32 wi3_1)
 {
-	const uint32 v2_P3 = mul_P3(wi3_0, add_P3(u_P3[0], u_P3[2]));
-	const uint32 v3_P3 = mul_P3(wi3_0, add_P3(u_P3[1], u_P3[3]));
-	u_P3[2] = mul_P3(wi3_1, sub_P3(u_P3[2], u_P3[0]));
-	u_P3[0] = mul_P3(wi3_1, sub_P3(u_P3[0], v2_P3));
-	u_P3[3] = mul_P3(wi3_1, sub_P3(u_P3[3], u_P3[1]));
-	u_P3[1] = mul_P3(wi3_1, sub_P3(u_P3[1], v3_P3));
+	const uint32 v2_P3 = mulC_P3(add_P3(u_P3[0], u_P3[2]), wi3_0);
+	const uint32 v3_P3 = mulC_P3(add_P3(u_P3[1], u_P3[3]), wi3_0);
+	u_P3[2] = mulC_P3(sub_P3(u_P3[2], u_P3[0]), wi3_1);
+	u_P3[0] = mulC_P3(sub_P3(u_P3[0], v2_P3), wi3_1);
+	u_P3[3] = mulC_P3(sub_P3(u_P3[3], u_P3[1]), wi3_1);
+	u_P3[1] = mulC_P3(sub_P3(u_P3[1], v3_P3), wi3_1);
 }
 
 inline void sqr42_P12(uint32_2 * const u_P12, const uint32_2 w12_2, const uint32_2 w12_3)
 {
-	const uint32_2 u1w2_P12 = mul_P12(u_P12[1], w12_2), u3w3_P12 = mul_P12(u_P12[3], w12_3);
+	const uint32_2 u1w2_P12 = mulC_P12(u_P12[1], w12_2), u3w3_P12 = mulC_P12(u_P12[3], w12_3);
 	const uint32_2 v0_P12 = add_P12(mul_P12(u_P12[0], u_P12[0]), mul_P12(u1w2_P12, u1w2_P12));
 	const uint32_2 v1_P12 = mul_P12(add_P12(u_P12[0], u_P12[0]), u_P12[1]);
 	const uint32_2 v2_P12 = add_P12(mul_P12(u_P12[2], u_P12[2]), mul_P12(u3w3_P12, u3w3_P12));
@@ -344,7 +324,7 @@ inline void sqr42_P12(uint32_2 * const u_P12, const uint32_2 w12_2, const uint32
 }
 inline void sqr42_P3(uint32 * const u_P3, const uint32 w3_2, const uint32 w3_3)
 {
-	const uint32 u1w2_P3 = mul_P3(u_P3[1], w3_2), u3w3_P3 = mul_P3(u_P3[3], w3_3);
+	const uint32 u1w2_P3 = mulC_P3(u_P3[1], w3_2), u3w3_P3 = mulC_P3(u_P3[3], w3_3);
 	const uint32 v0_P3 = add_P3(mul_P3(u_P3[0], u_P3[0]), mul_P3(u1w2_P3, u1w2_P3));
 	const uint32 v1_P3 = mul_P3(add_P3(u_P3[0], u_P3[0]), u_P3[1]);
 	const uint32 v2_P3 = add_P3(mul_P3(u_P3[2], u_P3[2]), mul_P3(u3w3_P3, u3w3_P3));
@@ -537,9 +517,8 @@ __kernel
 void set(__global uint32_2 * restrict const x12, __global uint32 * restrict const x3, const uint32 a)
 {
 	const sz_t k = (sz_t)get_global_id(0);
-	uint32 v1 = 0, v2 = 0, v3 = 0;
-	if (k < VSIZE) { v1 = toMonty_P1(a); v2 = toMonty_P2(a); v3 = toMonty_P3(a); }
-	x12[k] = (uint32_2)(v1, v2); x3[k] = v3;
+	const uint32 v = (k < VSIZE) ? a : 0;
+	x12[k] = (uint32_2)(v, v); x3[k] = v;
 }
 
 __kernel
@@ -845,14 +824,14 @@ void normalize1(const __global uint32_2 * restrict const bb_inv, const __global 
 	const uint32 b = bb_inv[i].s0, b_inv = bb_inv[i].s1;
 	const int32 b_s = bs[i];
 
-	int96 a = int96_set_si(0);
+	int96 a = int96_zero();
 	for (sz_t c = 0; c < CSIZE; ++c)
 	{
 		const sz_t k = k0 + c * VSIZE;
 		const uint32_2 x12k = x12[k];
-		int96 l = garner3(fromMonty_P1(mul_P1(x12k.s0, NORM1)), fromMonty_P2(mul_P2(x12k.s1, NORM2)), fromMonty_P3(mul_P3(x3[k], NORM3)));
-		if ((dup & mask64[i]) != 0) l = int96_add(l, l);
-		a = int96_add(a, l);
+		int96 l = garner3(mulC_P1(x12k.s0, NORM1), mulC_P2(x12k.s1, NORM2), mulC_P3(x3[k], NORM3));
+		const int96 l2 = ((dup & mask64[i]) != 0) ? l : int96_zero();
+		a = int96_add(int96_add(a, l), l2);
 		const int32 r = reduce96(&a, b, b_inv, b_s);
 		x12[k] = (uint32_2)(seti_P1(r), seti_P2(r)); x3[k] = seti_P3(r);
 	}
@@ -877,12 +856,12 @@ void normalize2(const __global uint32_2 * restrict const bb_inv, const __global 
 	for (c = 0; c < CSIZE - 1; ++c)
 	{
 		const sz_t k = k0 + c * VSIZE;
-		a += geti_P1(fromMonty_P1(x12[k].s0));
+		a += geti_P1(x12[k].s0);
 		const int32 r = reduce64(&a, b, b_inv, b_s);
 		x12[k] = (uint32_2)(seti_P1(r), seti_P2(r)); x3[k] = seti_P3(r);
 		if (a == 0) return;
 	}
-	if (c == CSIZE - 1)
+	// if (c == CSIZE - 1)
 	{
 		const sz_t k = k0 + c * VSIZE;
 		x12[k] = add_P12(x12[k], (uint32_2)(seti_P1((int32)a), seti_P2((int32)a))); x3[k] = add_P3(x3[k], seti_P3((int32)a));

@@ -315,14 +315,12 @@ private:
 		src << "#define\tQ1\t" << mf1.q() << "u" << std::endl;
 		src << "#define\tQ2\t" << mf2.q() << "u" << std::endl;
 		src << "#define\tQ3\t" << mf3.q() << "u" << std::endl;
-		src << "#define\tR1\t" << mf1.r2() << "u" << std::endl;
-		src << "#define\tR2\t" << mf2.r2() << "u" << std::endl;
-		src << "#define\tR3\t" << mf3.r2() << "u" << std::endl;
 		src << "#define\tP1_INV\t" << static_cast<uint64_t>(-1) / P1 - (static_cast<uint64_t>(1) << 32) << "u" << std::endl;
 		src << "#define\tP2_INV\t" << static_cast<uint64_t>(-1) / P2 - (static_cast<uint64_t>(1) << 32) << "u" << std::endl;
-		src << "#define\tInvP2_P1\t" << 105u << "u" << std::endl;
-		src << "#define\tInvP3_P1\t" << 3220439109u << "u" << std::endl;
-		src << "#define\tInvP3_P2\t" << 607575087u << "u" << std::endl;
+		src << "#define\tP3_INV\t" << static_cast<uint64_t>(-1) / P3 - (static_cast<uint64_t>(1) << 32) << "u" << std::endl;
+		src << "#define\tInvP2_P1\t" << mf1.toMonty(105u) << "u" << std::endl;
+		src << "#define\tInvP3_P1\t" << mf1.toMonty(3220439109u) << "u" << std::endl;
+		src << "#define\tInvP3_P2\t" << mf2.toMonty(607575087u) << "u" << std::endl;
 		src << "#define\tP1P2P3l\t" << 8307431584695320577ull << "ul" << std::endl;
 		src << "#define\tP1P2P3h\t" << 4188662890u << "u" << std::endl;
 		src << "#define\tP1P2P3_2l\t" << 4153715792347660288ull << "ul" << std::endl;
@@ -516,7 +514,7 @@ public:
 			{
 				const size_t k = j * VSIZE + i;
 				RNSe xk; xk.set(x[k]);
-				const int32 ixk = xk.fromMonty().r3().getInt();
+				const int32 ixk = xk.r3().getInt();
 				int64 e = f[i] + ixk;
 				x[k] = reduce(e, b[i]);
 				f[i] = e;

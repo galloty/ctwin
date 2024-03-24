@@ -101,7 +101,7 @@ private:
 #endif
 
 		std::ostringstream ss;
-		ss << "cyclo 24.01.0 (" << sysver << ssc.str() << ")" << std::endl;
+		ss << "cyclo 24.03.0 (" << sysver << ssc.str() << ")" << std::endl;
 		ss << "Copyright (c) 2023, Yves Gallot" << std::endl;
 		ss << "ctwin is free source code, under the MIT license." << std::endl;
 		if (nl)
@@ -179,8 +179,6 @@ public:
 
 		ocl::platform platform;
 		if (platform.displayDevices() == 0) throw std::runtime_error("no OpenCL device");
-
-		if (args.empty()) return;
 
 		size_t d = 0;
 		int n = 0;
