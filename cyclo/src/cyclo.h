@@ -270,13 +270,17 @@ private:
 		}
 		mpz_clear(e);
 		const int L = 2 << (ilog2_32(uint32_t(i0)) / 2), B_GL = int((i0 - 1) / L) + 1;
+		const mpz_t * const exponent_ptr = exponent.data();
 
 		const int i_start = (ri != 0) ? ri : i0;
 
 		for (int i = i_start; i >= 0; --i)
 		{
+#if defined(BOINC)
 			if (_isBoinc) boincMonitor(ctxFilename, k, i, chrono);
-			else if (i % B_GL == 0)
+			else
+#endif
+			if (i % B_GL == 0)
 			{
 				if (chrono.getRecordTime() > 600)
 				{
@@ -292,7 +296,7 @@ private:
 			}
 
 			// if (i == i0 / 2) e = e ^ 1;	// => invalid
-			pTransform->squareDup(get_bitcnt(size_t(i), exponent.data()));
+			pTransform->squareDup(get_bitcnt(size_t(i), exponent_ptr));
 
 			if ((i % B_GL == 0) && (i / B_GL != 0))
 			{
@@ -337,7 +341,9 @@ private:
 		pTransform->set(1);
 		for (int i = i0; i >= B_GL; --i)
 		{
+#if defined(BOINC)
 			if (_isBoinc) boincMonitor();
+#endif
 			if (_quit) return false;
 
 			pTransform->squareDup(get_bitcnt(size_t(i), exponent.data()));
@@ -347,7 +353,9 @@ private:
 
 		for (int i = B_GL - 1; i >= 0; --i)
 		{
+#if defined(BOINC)
 			if (_isBoinc) boincMonitor();
+#endif
 			if (_quit) return false;
 
 			const uint64_t bitcnt = (i <= i0) ? get_bitcnt(size_t(i), exponent.data()) : 0;
