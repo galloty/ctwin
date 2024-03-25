@@ -96,24 +96,12 @@ inline uint32 _mulMod(const uint32 lhs, const uint32 rhs, const uint32 p, const 
 }
 
 // Peter L. Montgomery, Modular multiplication without trial division, Math. Comp.44 (1985), 519–521.
-
-// The Montgomery REDC algorithm
-inline uint32 REDC(const uint64 t, const uint32 p, const uint32 q)
-{
-	const uint32 mp = mul_hi((uint32)t * q, p), t_hi = (uint32)(t >> 32), r = t_hi - mp;
-	return (t_hi < mp) ? r + p : r;
-}
-
-inline uint32 REDCshort(const uint32 t, const uint32 p, const uint32 q)
-{
-	const uint32 mp = mul_hi(t * q, p);
-	return (mp != 0) ? p - mp : 0;
-}
-
 // Montgomery form (lhs, rhs and output): if 0 <= r < p then f is r * 2^32 mod p
 inline uint32 _mulMonty(const uint32 lhs, const uint32 rhs, const uint32 p, const uint32 q)
 {
-	return REDC(lhs * (uint64)rhs, p, q);
+	const uint64 t = lhs * (uint64)rhs;
+	const uint32 mp = mul_hi((uint32)t * q, p), t_hi = (uint32)(t >> 32), r = t_hi - mp;
+	return (t_hi < mp) ? r + p : r;
 }
 
 inline uint32 add_P1(const uint32 lhs, const uint32 rhs) { return _addMod(lhs, rhs, P1); }
