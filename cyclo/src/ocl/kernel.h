@@ -108,7 +108,6 @@ static const char * const src_ocl_kernel = \
 "}\n" \
 "\n" \
 "// Peter L. Montgomery, Modular multiplication without trial division, Math. Comp.44 (1985), 519–521.\n" \
-"\n" \
 "// Montgomery form (lhs, rhs and output): if 0 <= r < p then f is r * 2^32 mod p\n" \
 "inline uint32 _mulMonty(const uint32 lhs, const uint32 rhs, const uint32 p, const uint32 q)\n" \
 "{\n" \

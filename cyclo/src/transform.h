@@ -393,13 +393,13 @@ public:
 				set(1);
 				squareDup(uint64(-1));
 				engine.resetProfiles();
-				const size_t m = 16;
+				const size_t m = 256;
 				uint64 e = 0; for (size_t j = 0; j < VSIZE; ++j) e |= uint64(j % 2) << j;
 				for (size_t i = 0; i < m; ++i) squareDup(e);
-				const cl_ulong time = engine.getProfileTime();
+				const cl_ulong time = engine.getProfileTime();	// ns
 				releaseEngine();
 
-				std::ostringstream ss; ss << "vsize = " << VSIZE << ", csize = " << csize << ", " << time * 1e-6 / m << " ms" << std::endl;
+				std::ostringstream ss; ss << "vsize = " << VSIZE << ", csize = " << csize << ", " << time * 1e-3 / m << " us" << std::endl;
 				pio::display(ss.str());
 
 				if (time < bestTime)
