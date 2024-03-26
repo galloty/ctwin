@@ -306,18 +306,19 @@ private:
 		src << "#define\tNSIZE\t" << n << std::endl;
 		src << "#define\tLNSIZE\t" << this->_ln << std::endl;
 		src << "#define\tCSIZE\t" << csize << std::endl << std::endl;
-		src << "#define\tNORM1\t" << mf1.toMonty(Zp1::norm(n).get()) << "u" << std::endl;
-		src << "#define\tNORM2\t" << mf2.toMonty(Zp2::norm(n).get()) << "u" << std::endl;
-		src << "#define\tNORM3\t" << mf3.toMonty(Zp3::norm(n).get()) << "u" << std::endl;
+		// Not converted into Montgomery form such that output is converted out of Montgomery form
+		src << "#define\tNORM1\t" << Zp1::norm(n).get() << "u" << std::endl;
+		src << "#define\tNORM2\t" << Zp2::norm(n).get() << "u" << std::endl;
+		src << "#define\tNORM3\t" << Zp3::norm(n).get() << "u" << std::endl;
 		src << "#define\tP1\t" << P1 << "u" << std::endl;
 		src << "#define\tP2\t" << P2 << "u" << std::endl;
 		src << "#define\tP3\t" << P3 << "u" << std::endl;
 		src << "#define\tQ1\t" << mf1.q() << "u" << std::endl;
 		src << "#define\tQ2\t" << mf2.q() << "u" << std::endl;
 		src << "#define\tQ3\t" << mf3.q() << "u" << std::endl;
-		src << "#define\tP1_INV\t" << static_cast<uint64_t>(-1) / P1 - (static_cast<uint64_t>(1) << 32) << "u" << std::endl;
-		src << "#define\tP2_INV\t" << static_cast<uint64_t>(-1) / P2 - (static_cast<uint64_t>(1) << 32) << "u" << std::endl;
-		src << "#define\tP3_INV\t" << static_cast<uint64_t>(-1) / P3 - (static_cast<uint64_t>(1) << 32) << "u" << std::endl;
+		src << "#define\tR1\t" << mf1.r2() << "u" << std::endl;
+		src << "#define\tR2\t" << mf2.r2() << "u" << std::endl;
+		src << "#define\tR3\t" << mf3.r2() << "u" << std::endl;
 		src << "#define\tInvP2_P1\t" << mf1.toMonty(105u) << "u" << std::endl;
 		src << "#define\tInvP3_P1\t" << mf1.toMonty(3220439109u) << "u" << std::endl;
 		src << "#define\tInvP3_P2\t" << mf2.toMonty(607575087u) << "u" << std::endl;
@@ -337,7 +338,18 @@ private:
 		std::vector<uint32_2> wr(n), wri(n);
 		std::vector<uint32> wre(n), wrie(n);
 
-		for (size_t s = 1; s < n; s *= 2)
+		const RNS r_s = RNS::prRoot_n(6u);
+		const RNSe r_se = RNSe::prRoot_n(6u);
+		// toMonty is applied twice to convert input into Montgomery form
+		wr[0] = r_s.toMonty().toMonty().get(); wre[0] = r_se.toMonty().toMonty().get();
+		wr[1] = RNS(r_s - RNS(1)).toMonty().toMonty().get(); wre[1] = RNSe(r_se - RNSe(1)).toMonty().toMonty().get();
+		wri[0] = r_s.toMonty().get(); wrie[0] = r_se.toMonty().get();
+		const RNS dsr_inv = RNS(RNS(1) - (r_s + r_s)).invert();
+		const RNSe dsr_inve = RNSe(RNSe(1) - (r_se + r_se)).invert();
+		wri[1] = RNS(dsr_inv + dsr_inv).toMonty().get();
+		wrie[1] = RNSe(dsr_inve + dsr_inve).toMonty().get();
+
+		for (size_t s = 2; s < n; s *= 2)
 		{
 			const RNS r_s = RNS::prRoot_n(static_cast<uint32_t>(6 * s));
 			const RNSe r_se = RNSe::prRoot_n(static_cast<uint32_t>(6 * s));
@@ -345,17 +357,9 @@ private:
 			{
 				const uint32_t j_s = static_cast<uint32_t>(3 * bitRev(j, s) + 1 + (2 * j) / s);
 				const RNS wrsj = r_s.pow(j_s);
-				wr[s + j] = wrsj.toMonty().get(); wri[s + s - j - 1] = RNS(-wrsj).toMonty().get();
 				const RNSe wrsje = r_se.pow(j_s);
-				wre[s + j] = wrsje.toMonty().get(); wrie[s + s - j - 1] = RNSe(-wrsje).toMonty().get();
-			}
-			if (s == 1)
-			{
-				wri[0] = wr[1]; wrie[0] = wre[1];
-				const RNS dsr_inv = RNS(RNS(1) - (r_s + r_s)).invert();
-				const RNSe dsr_inve = RNSe(RNSe(1) - (r_se + r_se)).invert();
-				wri[1] = RNS(dsr_inv + dsr_inv).toMonty().get();
-				wrie[1] = RNSe(dsr_inve + dsr_inve).toMonty().get();
+				wr[s + j] = wrsj.toMonty().get(); wre[s + j] = wrsje.toMonty().get();
+				wri[s + s - j - 1] = RNS(-wrsj).toMonty().get(); wrie[s + s - j - 1] = RNSe(-wrsje).toMonty().get();
 			}
 		}
 
