@@ -232,23 +232,17 @@ static const char * const src_ocl_kernel = \
 "	u_P3[3] = sub_P3(u_P3[1], u3w1_P3); u_P3[1] = add_P3(u_P3[1], u3w1_P3);\n" \
 "}\n" \
 "\n" \
-"inline void frwd41_0_P12(uint32_2 * const u_P12, const uint32_2 w12_0, const uint32_2 w12_1)\n" \
+"inline void frwd41_0_P12(uint32_2 * const u_P12, const uint32_2 w12_1)\n" \
 "{\n" \
-"	u_P12[0] = toMonty_P12(u_P12[0]);\n" \
-"	const uint32_2 u2w1_P12 = mul_P12(u_P12[2], w12_1), u2w0_P12 = mul_P12(u_P12[2], w12_0);\n" \
-"	u_P12[2] = sub_P12(u_P12[0], u2w1_P12); u_P12[0] = add_P12(u_P12[0], u2w0_P12);\n" \
-"	u_P12[1] = toMonty_P12(u_P12[1]);\n" \
-"	const uint32_2 u3w1_P12 = mul_P12(u_P12[3], w12_1), u3w0_P12 = mul_P12(u_P12[3], w12_0);\n" \
-"	u_P12[3] = sub_P12(u_P12[1], u3w1_P12); u_P12[1] = add_P12(u_P12[1], u3w0_P12);\n" \
+"	const uint32_2 u2w1_P12 = mul_P12(u_P12[2], w12_1), u3w1_P12 = mul_P12(u_P12[3], w12_1);\n" \
+"	u_P12[2] = add_P12(u_P12[2], sub_P12(u_P12[0], u2w1_P12)); u_P12[0] = add_P12(u_P12[0], u2w1_P12);\n" \
+"	u_P12[3] = add_P12(u_P12[3], sub_P12(u_P12[1], u3w1_P12)); u_P12[1] = add_P12(u_P12[1], u3w1_P12);\n" \
 "}\n" \
-"inline void frwd41_0_P3(uint32 * const u_P3, const uint32 w3_0, const uint32 w3_1)\n" \
+"inline void frwd41_0_P3(uint32 * const u_P3, const uint32 w3_1)\n" \
 "{\n" \
-"	u_P3[0] = toMonty_P3(u_P3[0]);\n" \
-"	const uint32 u2w1_P3 = mul_P3(u_P3[2], w3_1), u2w0_P3 = mul_P3(u_P3[2], w3_0);\n" \
-"	u_P3[2] = sub_P3(u_P3[0], u2w1_P3); u_P3[0] = add_P3(u_P3[0], u2w0_P3);\n" \
-"	u_P3[1] = toMonty_P3(u_P3[1]);\n" \
-"	const uint32 u3w1_P3 = mul_P3(u_P3[3], w3_1), u3w0_P3 = mul_P3(u_P3[3], w3_0);\n" \
-"	u_P3[3] = sub_P3(u_P3[1], u3w1_P3); u_P3[1] = add_P3(u_P3[1], u3w0_P3);\n" \
+"	const uint32 u2w1_P3 = mul_P3(u_P3[2], w3_1), u3w1_P3 = mul_P3(u_P3[3], w3_1);\n" \
+"	u_P3[2] = add_P3(u_P3[2], sub_P3(u_P3[0], u2w1_P3)); u_P3[0] = add_P3(u_P3[0], u2w1_P3);\n" \
+"	u_P3[3] = add_P3(u_P3[3], sub_P3(u_P3[1], u3w1_P3)); u_P3[1] = add_P3(u_P3[1], u3w1_P3);\n" \
 "}\n" \
 "\n" \
 "inline void frwd42_P12(uint32_2 * const u_P12, const uint32_2 w12_2, const uint32_2 w12_3)\n" \
@@ -262,6 +256,21 @@ static const char * const src_ocl_kernel = \
 "	const uint32 u1w2_P3 = mul_P3(u_P3[1], w3_2), u3w3_P3 = mul_P3(u_P3[3], w3_3);\n" \
 "	u_P3[1] = sub_P3(u_P3[0], u1w2_P3); u_P3[0] = add_P3(u_P3[0], u1w2_P3);\n" \
 "	u_P3[3] = sub_P3(u_P3[2], u3w3_P3); u_P3[2] = add_P3(u_P3[2], u3w3_P3);\n" \
+"}\n" \
+"\n" \
+"inline void frwd42_0_P12(uint32_2 * const u_P12, const uint32_2 w12_2, const uint32_2 w12_3)\n" \
+"{\n" \
+"	const uint32_2 u0_P12 = toMonty_P12(u_P12[0]), u2_P12 = toMonty_P12(u_P12[2]);\n" \
+"	const uint32_2 u1w2_P12 = mul_P12(u_P12[1], w12_2), u3w3_P12 = mul_P12(u_P12[3], w12_3);\n" \
+"	u_P12[1] = sub_P12(u0_P12, u1w2_P12); u_P12[0] = add_P12(u0_P12, u1w2_P12);\n" \
+"	u_P12[3] = sub_P12(u2_P12, u3w3_P12); u_P12[2] = add_P12(u2_P12, u3w3_P12);\n" \
+"}\n" \
+"inline void frwd42_0_P3(uint32 * const u_P3, const uint32 w3_2, const uint32 w3_3)\n" \
+"{\n" \
+"	const uint32 u0_P3 = toMonty_P3(u_P3[0]), u2_P3 = toMonty_P3(u_P3[2]);\n" \
+"	const uint32 u1w2_P3 = mul_P3(u_P3[1], w3_2), u3w3_P3 = mul_P3(u_P3[3], w3_3);\n" \
+"	u_P3[1] = sub_P3(u0_P3, u1w2_P3); u_P3[0] = add_P3(u0_P3, u1w2_P3);\n" \
+"	u_P3[3] = sub_P3(u2_P3, u3w3_P3); u_P3[2] = add_P3(u2_P3, u3w3_P3);\n" \
 "}\n" \
 "\n" \
 "inline void bkwd42_P12(uint32_2 * const u_P12, const uint32_2 wi12_2, const uint32_2 wi12_3)\n" \
@@ -724,8 +733,8 @@ static const char * const src_ocl_kernel = \
 "	const sz_t sj4 = 4 + (vid_blk >> (lm + 2)) + i;\n" \
 "\n" \
 "	uint32_2 u_P12[4]; read4_P12(u_P12, x12, k0 + miv, 4 * m); uint32 u_P3[4]; read4_P3(u_P3, x3, k0 + miv, 4 * m);\n" \
-"	frwd41_0_P12(u_P12, wr12[0], wr12[1]); frwd41_0_P3(u_P3, wr3[0], wr3[1]);\n" \
-"	frwd42_P12(u_P12, wr12[2], wr12[3]); frwd42_P3(u_P3, wr3[2], wr3[3]);\n" \
+"	frwd41_0_P12(u_P12, wr12[1]); frwd41_0_P3(u_P3, wr3[1]);\n" \
+"	frwd42_0_P12(u_P12, wr12[2], wr12[3]); frwd42_0_P3(u_P3, wr3[2], wr3[3]);\n" \
 "	write4l_P12(X12, u_P12, iv + l, 4); write4l_P3(X3, u_P3, iv + l, 4);\n" \
 "\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \

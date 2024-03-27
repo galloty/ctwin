@@ -338,28 +338,29 @@ private:
 		std::vector<uint32_2> wr(n), wri(n);
 		std::vector<uint32> wre(n), wrie(n);
 
-		const RNS r_s = RNS::prRoot_n(6u);
-		const RNSe r_se = RNSe::prRoot_n(6u);
-		// toMonty is applied twice to convert input into Montgomery form
-		wr[0] = r_s.toMonty().toMonty().get(); wre[0] = r_se.toMonty().toMonty().get();
-		wr[1] = RNS(r_s - RNS(1)).toMonty().toMonty().get(); wre[1] = RNSe(r_se - RNSe(1)).toMonty().toMonty().get();
-		wri[0] = r_s.toMonty().get(); wrie[0] = r_se.toMonty().get();
-		const RNS dsr_inv = RNS(RNS(1) - (r_s + r_s)).invert();
-		const RNSe dsr_inve = RNSe(RNSe(1) - (r_se + r_se)).invert();
-		wri[1] = RNS(dsr_inv + dsr_inv).toMonty().get();
-		wrie[1] = RNSe(dsr_inve + dsr_inve).toMonty().get();
-
-		for (size_t s = 2; s < n; s *= 2)
+		for (size_t s = 1; s < n; s *= 2)
 		{
 			const RNS r_s = RNS::prRoot_n(static_cast<uint32_t>(6 * s));
 			const RNSe r_se = RNSe::prRoot_n(static_cast<uint32_t>(6 * s));
 			for (size_t j = 0; j < s; ++j)
 			{
 				const uint32_t j_s = static_cast<uint32_t>(3 * bitRev(j, s) + 1 + (2 * j) / s);
-				const RNS wrsj = r_s.pow(j_s);
-				const RNSe wrsje = r_se.pow(j_s);
-				wr[s + j] = wrsj.toMonty().get(); wre[s + j] = wrsje.toMonty().get();
+				RNS wrsj = r_s.pow(j_s); RNSe wrsje = r_se.pow(j_s);
 				wri[s + s - j - 1] = RNS(-wrsj).toMonty().get(); wrie[s + s - j - 1] = RNSe(-wrsje).toMonty().get();
+				if (s == 2)
+				{
+					// toMonty is applied twice to convert input into Montgomery form
+					wrsj = wrsj.toMonty(); wrsje = wrsje.toMonty();
+				}
+				wr[s + j] = wrsj.toMonty().get(); wre[s + j] = wrsje.toMonty().get();
+			}
+			if (s == 1)
+			{
+				wri[0] = wr[1]; wrie[0] = wre[1];
+				const RNS dsr_inv = RNS(RNS(1) - (r_s + r_s)).invert();
+				const RNSe dsr_inve = RNSe(RNSe(1) - (r_se + r_se)).invert();
+				wri[1] = RNS(dsr_inv + dsr_inv).toMonty().get();
+				wrie[1] = RNSe(dsr_inve + dsr_inve).toMonty().get();
 			}
 		}
 
