@@ -178,6 +178,7 @@ private:
 			return RNS_T(n1, n2);
 		}
 
+		static const RNS_T norm(const uint32_t n) { return RNS_T(Zp1::norm(n), Zp2::norm(n)); }
 		static const RNS_T prRoot_n(const uint32_t n) { return RNS_T(Zp1::prRoot_n(n), Zp2::prRoot_n(n)); }
 	};
 
@@ -222,6 +223,7 @@ private:
 			return RNSe_T(n3);
 		}
 
+		static const RNSe_T norm(const uint32_t n) { return RNSe_T(Zp3::norm(n)); }
 		static const RNSe_T prRoot_n(const uint32_t n) { return RNSe_T(Zp3::prRoot_n(n)); }
 	};
 
@@ -258,7 +260,7 @@ private:
 
 		std::ifstream clFile(clFileName);
 		if (!clFile.is_open()) return false;
-		
+
 		// if .cl file exists then generate header file
 		std::ofstream hFile(headerFileName, std::ios::binary);	// binary: don't convert line endings to `CRLF` 
 		if (!hFile.is_open()) throw std::runtime_error("cannot write openCL header file");
@@ -306,10 +308,6 @@ private:
 		src << "#define\tNSIZE\t" << n << std::endl;
 		src << "#define\tLNSIZE\t" << this->_ln << std::endl;
 		src << "#define\tCSIZE\t" << csize << std::endl << std::endl;
-		// Not converted into Montgomery form such that output is converted out of Montgomery form
-		src << "#define\tNORM1\t" << Zp1::norm(n).get() << "u" << std::endl;
-		src << "#define\tNORM2\t" << Zp2::norm(n).get() << "u" << std::endl;
-		src << "#define\tNORM3\t" << Zp3::norm(n).get() << "u" << std::endl;
 		src << "#define\tP1\t" << P1 << "u" << std::endl;
 		src << "#define\tP2\t" << P2 << "u" << std::endl;
 		src << "#define\tP3\t" << P3 << "u" << std::endl;
@@ -338,6 +336,8 @@ private:
 		std::vector<uint32_2> wr(n), wri(n);
 		std::vector<uint32> wre(n), wrie(n);
 
+		const RNS nn_2 = RNS::norm(n / 2); const RNSe nn_2e = RNSe::norm(n / 2);
+
 		for (size_t s = 1; s < n; s *= 2)
 		{
 			const RNS r_s = RNS::prRoot_n(static_cast<uint32_t>(6 * s));
@@ -359,8 +359,9 @@ private:
 				wri[0] = wr[1]; wrie[0] = wre[1];
 				const RNS dsr_inv = RNS(RNS(1) - (r_s + r_s)).invert();
 				const RNSe dsr_inve = RNSe(RNSe(1) - (r_se + r_se)).invert();
-				wri[1] = RNS(dsr_inv + dsr_inv).toMonty().get();
-				wrie[1] = RNSe(dsr_inve + dsr_inve).toMonty().get();
+				// Not converted into Montgomery form such that output is converted out of Montgomery form
+				wri[1] = (RNS(dsr_inv + dsr_inv) * nn_2).get();
+				wrie[1] = (RNSe(dsr_inve + dsr_inve) * nn_2e).get();
 			}
 		}
 

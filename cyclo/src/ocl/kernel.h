@@ -98,6 +98,11 @@ static const char * const src_ocl_kernel = \
 "	return lhs - rhs + c;\n" \
 "}\n" \
 "\n" \
+"inline uint32 _halfMod(const uint32 lhs, const uint32 p)\n" \
+"{\n" \
+"	return (lhs % 2 == 0) ? lhs / 2 : hadd(lhs, p);\n" \
+"}\n" \
+"\n" \
 "// Peter L. Montgomery, Modular multiplication without trial division, Math. Comp.44 (1985), 519–521.\n" \
 "// Montgomery form (lhs, rhs and output): if 0 <= r < p then f is r * 2^32 mod p\n" \
 "inline uint32 _mulMonty(const uint32 lhs, const uint32 rhs, const uint32 p, const uint32 q)\n" \
@@ -114,6 +119,10 @@ static const char * const src_ocl_kernel = \
 "inline uint32 sub_P1(const uint32 lhs, const uint32 rhs) { return _subMod(lhs, rhs, P1); }\n" \
 "inline uint32 sub_P2(const uint32 lhs, const uint32 rhs) { return _subMod(lhs, rhs, P2); }\n" \
 "inline uint32 sub_P3(const uint32 lhs, const uint32 rhs) { return _subMod(lhs, rhs, P3); }\n" \
+"\n" \
+"inline uint32 half_P1(const uint32 lhs) { return _halfMod(lhs, P1); }\n" \
+"inline uint32 half_P2(const uint32 lhs) { return _halfMod(lhs, P2); }\n" \
+"inline uint32 half_P3(const uint32 lhs) { return _halfMod(lhs, P3); }\n" \
 "\n" \
 "// Montgomery form\n" \
 "inline uint32 mul_P1(const uint32 lhs, const uint32 rhs) { return _mulMonty(lhs, rhs, P1, Q1); }\n" \
@@ -132,6 +141,7 @@ static const char * const src_ocl_kernel = \
 "\n" \
 "inline uint32_2 add_P12(const uint32_2 lhs, const uint32_2 rhs) { return (uint32_2)(add_P1(lhs.s0, rhs.s0), add_P2(lhs.s1, rhs.s1)); }\n" \
 "inline uint32_2 sub_P12(const uint32_2 lhs, const uint32_2 rhs) { return (uint32_2)(sub_P1(lhs.s0, rhs.s0), sub_P2(lhs.s1, rhs.s1)); }\n" \
+"inline uint32_2 half_P12(const uint32_2 lhs) { return (uint32_2)(half_P1(lhs.s0), half_P2(lhs.s1)); }\n" \
 "inline uint32_2 mul_P12(const uint32_2 lhs, const uint32_2 rhs) { return (uint32_2)(mul_P1(lhs.s0, rhs.s0), mul_P2(lhs.s1, rhs.s1)); }\n" \
 "inline uint32_2 toMonty_P12(const uint32_2 lhs) { return (uint32_2)(toMonty_P1(lhs.s0), toMonty_P2(lhs.s1)); }\n" \
 "\n" \
@@ -189,16 +199,14 @@ static const char * const src_ocl_kernel = \
 "inline void sqr2_P12(uint32_2 * const u_P12, const uint32_2 w12)\n" \
 "{\n" \
 "	const uint32_2 u1w_P12 = mul_P12(u_P12[1], w12);\n" \
-"	const uint32_2 v0_P12 = add_P12(mul_P12(u_P12[0], u_P12[0]), mul_P12(u1w_P12, u1w_P12));\n" \
-"	const uint32_2 v1_P12 = mul_P12(add_P12(u_P12[0], u_P12[0]), u_P12[1]);\n" \
-"	u_P12[0] = add_P12(v0_P12, v0_P12); u_P12[1] = add_P12(v1_P12, v1_P12);\n" \
+"	u_P12[1] = mul_P12(add_P12(u_P12[0], u_P12[0]), u_P12[1]);\n" \
+"	u_P12[0] = add_P12(mul_P12(u_P12[0], u_P12[0]), mul_P12(u1w_P12, u1w_P12));\n" \
 "}\n" \
 "inline void sqr2_P3(uint32 * const u_P3, const uint32 w3)\n" \
 "{\n" \
 "	const uint32 u1w_P3 = mul_P3(u_P3[1], w3);\n" \
-"	const uint32 v0_P3 = add_P3(mul_P3(u_P3[0], u_P3[0]), mul_P3(u1w_P3, u1w_P3));\n" \
-"	const uint32 v1_P3 = mul_P3(add_P3(u_P3[0], u_P3[0]), u_P3[1]);\n" \
-"	u_P3[0] = add_P3(v0_P3, v0_P3); u_P3[1] = add_P3(v1_P3, v1_P3);\n" \
+"	u_P3[1] = mul_P3(add_P3(u_P3[0], u_P3[0]), u_P3[1]);\n" \
+"	u_P3[0] = add_P3(mul_P3(u_P3[0], u_P3[0]), mul_P3(u1w_P3, u1w_P3));\n" \
 "}\n" \
 "\n" \
 "inline void read2_P12(uint32_2 * const u_P12, const __global uint32_2 * const x12, const sz_t k, const uint32 m)\n" \
@@ -320,23 +328,21 @@ static const char * const src_ocl_kernel = \
 "\n" \
 "inline void sqr42_P12(uint32_2 * const u_P12, const uint32_2 w12_2, const uint32_2 w12_3)\n" \
 "{\n" \
-"	const uint32_2 u1w2_P12 = mul_P12(u_P12[1], w12_2), u3w3_P12 = mul_P12(u_P12[3], w12_3);\n" \
-"	const uint32_2 v0_P12 = add_P12(mul_P12(u_P12[0], u_P12[0]), mul_P12(u1w2_P12, u1w2_P12));\n" \
-"	const uint32_2 v1_P12 = mul_P12(add_P12(u_P12[0], u_P12[0]), u_P12[1]);\n" \
-"	const uint32_2 v2_P12 = add_P12(mul_P12(u_P12[2], u_P12[2]), mul_P12(u3w3_P12, u3w3_P12));\n" \
-"	const uint32_2 v3_P12 = mul_P12(add_P12(u_P12[2], u_P12[2]), u_P12[3]);\n" \
-"	u_P12[0] = add_P12(v0_P12, v0_P12); u_P12[1] = add_P12(v1_P12, v1_P12);\n" \
-"	u_P12[2] = add_P12(v2_P12, v2_P12); u_P12[3] = add_P12(v3_P12, v3_P12);\n" \
+"	const uint32_2 u1w2_P12 = mul_P12(u_P12[1], w12_2);\n" \
+"	u_P12[1] = mul_P12(add_P12(u_P12[0], u_P12[0]), u_P12[1]);\n" \
+"	u_P12[0] = add_P12(mul_P12(u_P12[0], u_P12[0]), mul_P12(u1w2_P12, u1w2_P12));\n" \
+"	const uint32_2 u3w3_P12 = mul_P12(u_P12[3], w12_3);\n" \
+"	u_P12[3] = mul_P12(add_P12(u_P12[2], u_P12[2]), u_P12[3]);\n" \
+"	u_P12[2] = add_P12(mul_P12(u_P12[2], u_P12[2]), mul_P12(u3w3_P12, u3w3_P12));\n" \
 "}\n" \
 "inline void sqr42_P3(uint32 * const u_P3, const uint32 w3_2, const uint32 w3_3)\n" \
 "{\n" \
-"	const uint32 u1w2_P3 = mul_P3(u_P3[1], w3_2), u3w3_P3 = mul_P3(u_P3[3], w3_3);\n" \
-"	const uint32 v0_P3 = add_P3(mul_P3(u_P3[0], u_P3[0]), mul_P3(u1w2_P3, u1w2_P3));\n" \
-"	const uint32 v1_P3 = mul_P3(add_P3(u_P3[0], u_P3[0]), u_P3[1]);\n" \
-"	const uint32 v2_P3 = add_P3(mul_P3(u_P3[2], u_P3[2]), mul_P3(u3w3_P3, u3w3_P3));\n" \
-"	const uint32 v3_P3 = mul_P3(add_P3(u_P3[2], u_P3[2]), u_P3[3]);\n" \
-"	u_P3[0] = add_P3(v0_P3, v0_P3); u_P3[1] = add_P3(v1_P3, v1_P3);\n" \
-"	u_P3[2] = add_P3(v2_P3, v2_P3); u_P3[3] = add_P3(v3_P3, v3_P3);\n" \
+"	const uint32 u1w2_P3 = mul_P3(u_P3[1], w3_2);\n" \
+"	u_P3[1] = mul_P3(add_P3(u_P3[0], u_P3[0]), u_P3[1]);\n" \
+"	u_P3[0] = add_P3(mul_P3(u_P3[0], u_P3[0]), mul_P3(u1w2_P3, u1w2_P3));\n" \
+"	const uint32 u3w3_P3 = mul_P3(u_P3[3], w3_3);\n" \
+"	u_P3[3] = mul_P3(add_P3(u_P3[2], u_P3[2]), u_P3[3]);\n" \
+"	u_P3[2] = add_P3(mul_P3(u_P3[2], u_P3[2]), mul_P3(u3w3_P3, u3w3_P3));\n" \
 "}\n" \
 "\n" \
 "inline void read4_P12(uint32_2 * const u_P12, const __global uint32_2 * const x12, const sz_t k, const uint32 m)\n" \
@@ -631,8 +637,8 @@ static const char * const src_ocl_kernel = \
 "\n" \
 "	frwd2_P12(v_P12, wr12_1); frwd2_P3(v_P3, wr3_1);\n" \
 "\n" \
-"	for (sz_t h = 0; h < 2; ++h) u_P12[h] = mul_P12(u_P12[h], v_P12[h]);\n" \
-"	for (sz_t h = 0; h < 2; ++h) u_P3[h] = mul_P3(u_P3[h], v_P3[h]);\n" \
+"	for (sz_t h = 0; h < 2; ++h) u_P12[h] = half_P12(mul_P12(u_P12[h], v_P12[h]));\n" \
+"	for (sz_t h = 0; h < 2; ++h) u_P3[h] = half_P3(mul_P3(u_P3[h], v_P3[h]));\n" \
 "\n" \
 "	bkwd2_P12(u_P12, wri12[sj]); bkwd2_P3(u_P3, wri3[sj]);\n" \
 "\n" \
@@ -661,8 +667,8 @@ static const char * const src_ocl_kernel = \
 "	frwd41_P12(v_P12, wr12_1); frwd41_P3(v_P3, wr3_1);\n" \
 "	frwd42_P12(v_P12, wr12_2, wr12_3); frwd42_P3(v_P3, wr3_2, wr3_3);\n" \
 "\n" \
-"	for (sz_t h = 0; h < 4; ++h) u_P12[h] = mul_P12(u_P12[h], v_P12[h]);\n" \
-"	for (sz_t h = 0; h < 4; ++h) u_P3[h] = mul_P3(u_P3[h], v_P3[h]);\n" \
+"	for (sz_t h = 0; h < 4; ++h) u_P12[h] = half_P12(mul_P12(u_P12[h], v_P12[h]));\n" \
+"	for (sz_t h = 0; h < 4; ++h) u_P3[h] = half_P3(mul_P3(u_P3[h], v_P3[h]));\n" \
 "\n" \
 "	bkwd42_P12(u_P12, wri12[2 * sj], wri12[2 * sj + 1]); bkwd42_P3(u_P3, wri3[2 * sj], wri3[2 * sj + 1]);\n" \
 "	bkwd41_P12(u_P12, wri12[sj]); bkwd41_P3(u_P3, wri3[sj]);\n" \
@@ -835,7 +841,7 @@ static const char * const src_ocl_kernel = \
 "	{\n" \
 "		const sz_t k = k0 + c * VSIZE;\n" \
 "		const uint32_2 x12k = x12[k];\n" \
-"		int96 l = garner3(mul_P1(x12k.s0, NORM1), mul_P2(x12k.s1, NORM2), mul_P3(x3[k], NORM3));\n" \
+"		int96 l = garner3(x12k.s0, x12k.s1, x3[k]);\n" \
 "		const int96 l2 = ((dup & mask64[i]) != 0) ? l : int96_zero();\n" \
 "		a = int96_add(int96_add(a, l), l2);\n" \
 "		const int32 r = reduce96(&a, b, b_inv, b_s);\n" \
