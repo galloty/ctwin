@@ -214,6 +214,8 @@ public:
 class device : oclObject
 {
 private:
+	enum class EVendor { Unknown, NVIDIA, AMD, INTEL };
+
 	const cl_platform_id _platform;
 	const cl_device_id _device;
 #if defined(ocl_debug)
@@ -229,13 +231,12 @@ private:
 	cl_ulong _localMemSize = 0;
 	size_t _maxWorkGroupSize = 0;
 	cl_ulong _timerResolution = 0;
+	EVendor _vendor = EVendor::Unknown;
 	cl_context _context = nullptr;
 	cl_command_queue _queueF = nullptr;
 	cl_command_queue _queueP = nullptr;
 	cl_command_queue _queue = nullptr;
 	cl_program _program = nullptr;
-
-	enum class EVendor { Unknown, NVIDIA, AMD, INTEL };
 
 	struct profile
 	{
@@ -263,6 +264,7 @@ public:
 		char deviceVendor[1024]; oclFatal(clGetDeviceInfo(_device, CL_DEVICE_VENDOR, 1024, deviceVendor, nullptr));
 		char deviceVersion[1024]; oclFatal(clGetDeviceInfo(_device, CL_DEVICE_VERSION, 1024, deviceVersion, nullptr));
 		char driverVersion[1024]; oclFatal(clGetDeviceInfo(_device, CL_DRIVER_VERSION, 1024, driverVersion, nullptr));
+		_vendor = getVendor(deviceVendor);
 
 		cl_uint computeUnits; oclFatal(clGetDeviceInfo(_device, CL_DEVICE_MAX_COMPUTE_UNITS, sizeof(computeUnits), &computeUnits, nullptr));
 		cl_uint maxClockFrequency; oclFatal(clGetDeviceInfo(_device, CL_DEVICE_MAX_CLOCK_FREQUENCY, sizeof(maxClockFrequency), &maxClockFrequency, nullptr));
@@ -295,7 +297,7 @@ public:
 		_queue = _queueF;	// default queue is fast
 		oclFatal(err_ccq);
 
-		if (getVendor(deviceVendor) != EVendor::NVIDIA) _isSync = true;
+		if (_vendor != EVendor::NVIDIA) _isSync = true;
 	}
 
 public:
@@ -394,13 +396,14 @@ public:
 		char pgmOptions[1024];
 		strcpy(pgmOptions, "");
 #if defined(ocl_debug)
-		strcat(pgmOptions, " -cl-nv-verbose");
+		if (_vendor == EVendor::NVIDIA) strcat(pgmOptions, " -cl-nv-verbose");
+		if (_vendor == EVendor::AMD) strcat(pgmOptions, " -save-temps=.");
 #endif
 		const cl_int err = clBuildProgram(_program, 1, &_device, pgmOptions, nullptr, nullptr);
 
 #if !defined(ocl_debug)
 		if (err != CL_SUCCESS)
-#endif		
+#endif
 		{
 			size_t logSize; clGetProgramBuildInfo(_program, _device, CL_PROGRAM_BUILD_LOG, 0, nullptr, &logSize);
 			if (logSize > 2)
@@ -424,10 +427,10 @@ public:
 		size_t binSize; clGetProgramInfo(_program, CL_PROGRAM_BINARY_SIZES, sizeof(size_t), &binSize, nullptr);
 		std::vector<char> binary(binSize);
 		clGetProgramInfo(_program, CL_PROGRAM_BINARIES, sizeof(char *), &binary, nullptr);
-		std::ofstream fileOut("pgm.bin", std::ios::binary);
+		std::ofstream fileOut((_vendor == EVendor::NVIDIA) ? "pgm.ptx" : "pgm.bin", std::ios::binary);
 		fileOut.write(binary.data(), std::streamsize(binSize));
 		fileOut.close();
-#endif	
+#endif
 	}
 
 public:
@@ -508,7 +511,7 @@ protected:
 		{
 			oclFatal(clReleaseKernel(kernel));
 			kernel = nullptr;
-		}		
+		}
 	}
 
 protected:

@@ -304,10 +304,10 @@ private:
 
 		std::stringstream src;
 		MForm1 mf1; MForm2 mf2; MForm3 mf3;
-		src << "#define\tVSIZE\t" << VSIZE << std::endl;
-		src << "#define\tNSIZE\t" << n << std::endl;
+		src << "#define\tVSIZE\t" << VSIZE << "u" << std::endl;
+		src << "#define\tNSIZE\t" << n << "u" << std::endl;
 		src << "#define\tLNSIZE\t" << this->_ln << std::endl;
-		src << "#define\tCSIZE\t" << csize << std::endl << std::endl;
+		src << "#define\tCSIZE\t" << csize << "u" << std::endl << std::endl;
 		src << "#define\tP1\t" << P1 << "u" << std::endl;
 		src << "#define\tP2\t" << P2 << "u" << std::endl;
 		src << "#define\tP3\t" << P3 << "u" << std::endl;

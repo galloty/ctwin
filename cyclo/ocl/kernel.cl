@@ -536,7 +536,8 @@ void square2(const __global uint32_2 * restrict const wr12, const __global uint3
 {
 	const sz_t id = (sz_t)get_global_id(0), vid = id / VSIZE, l = id % VSIZE;
 
-	const sz_t sj = (sz_t)get_global_size(0) / VSIZE + vid, k = VSIZE * 2 * vid + l;
+	// get_global_size(0) is VSIZE * NSIZE / 2
+	const sz_t sj = NSIZE / 2 + vid, k = VSIZE * 2 * vid + l;
 
 	uint32_2 u_P12[2]; read2_P12(u_P12, x12, k, 1); uint32 u_P3[2]; read2_P3(u_P3, x3, k, 1);
 
@@ -552,7 +553,8 @@ void square4(const __global uint32_2 * restrict const wr12, const __global uint3
 {
 	const sz_t id = (sz_t)get_global_id(0), vid = id / VSIZE, l = id % VSIZE;
 
-	const sz_t sj = (sz_t)get_global_size(0) / VSIZE + vid, k = VSIZE * 4 * vid + l;
+	// get_global_size(0) is VSIZE * NSIZE / 4
+	const sz_t sj = NSIZE / 4 + vid, k = VSIZE * 4 * vid + l;
 
 	uint32_2 u_P12[4]; read4_P12(u_P12, x12, k, 1); uint32 u_P3[4]; read4_P3(u_P3, x3, k, 1);
 
@@ -571,7 +573,8 @@ void square8(const __global uint32_2 * restrict const wr12, const __global uint3
 	__local uint32_2 X12[8 * VSIZE];
 	__local uint32 X3[8 * VSIZE];
 
-	const sz_t n_2 = (sz_t)get_global_size(0) * 2 / VSIZE, sj2 = n_2 + (sz_t)get_global_id(0) * 2 / VSIZE;
+	// get_global_size(0) is VSIZE * NSIZE / 4
+	const sz_t sj2 = NSIZE / 2 + (sz_t)get_global_id(0) * 2 / VSIZE;
 	const sz_t k_group = (sz_t)get_group_id(0) * 8 * VSIZE, i = (sz_t)get_local_id(0);
 
 	const sz_t sj8 = sj2 / 4, k8 = i;
@@ -592,7 +595,8 @@ void square16(const __global uint32_2 * restrict const wr12, const __global uint
 	__local uint32_2 X12[16 * VSIZE];	// VSIZE = 64 => 8 KB
 	__local uint32 X3[16 * VSIZE];
 
-	const sz_t n_4 = (sz_t)get_global_size(0) / VSIZE, sj4 = n_4 + (sz_t)get_global_id(0) / VSIZE;
+	// get_global_size(0) is VSIZE * NSIZE / 4
+	const sz_t sj4 = NSIZE / 4 + (sz_t)get_global_id(0) / VSIZE;
 	const sz_t k_group = (sz_t)get_group_id(0) * 16 * VSIZE, i = (sz_t)get_local_id(0);
 
 	const sz_t sj16 = sj4 / 4, k16 = i;
@@ -612,7 +616,8 @@ void mul2(const __global uint32_2 * restrict const wr12, const __global uint32 *
 {
 	const sz_t id = (sz_t)get_global_id(0), vid = id / VSIZE, l = id % VSIZE;
 
-	const sz_t sj = (sz_t)get_global_size(0) / VSIZE + vid, k = VSIZE * 2 * vid + l;
+	// get_global_size(0) is VSIZE * NSIZE / 2
+	const sz_t sj = NSIZE / 2 + vid, k = VSIZE * 2 * vid + l;
 
 	const uint32_2 wr12_1 = wr12[sj];
 	const uint32 wr3_1 = wr3[sj];
@@ -640,7 +645,8 @@ void mul4(const __global uint32_2 * restrict const wr12, const __global uint32 *
 {
 	const sz_t id = (sz_t)get_global_id(0), vid = id / VSIZE, l = id % VSIZE;
 
-	const sz_t sj = (sz_t)get_global_size(0) / VSIZE + vid, k = VSIZE * 4 * vid + l;
+	// get_global_size(0) is VSIZE * NSIZE / 4
+	const sz_t sj = NSIZE / 4 + vid, k = VSIZE * 4 * vid + l;
 
 	const uint32_2 wr12_1 = wr12[sj], wr12_2 = wr12[2 * sj], wr12_3 = wr12[2 * sj + 1];
 	const uint32 wr3_1 = wr3[sj], wr3_2 = wr3[2 * sj], wr3_3 = wr3[2 * sj + 1];
@@ -842,8 +848,8 @@ __kernel
 void normalize2(const __global uint32_2 * restrict const bb_inv, const __global int32 * restrict const bs,
 				const __global int64 * restrict const f, __global uint32_2 * restrict const x12, __global uint32 * restrict const x3)
 {
-	// get_global_size(0) is VSIZE * NSIZE / CSIZE
 	const sz_t id = (sz_t)get_global_id(0);
+	// get_global_size(0) is VSIZE * NSIZE / CSIZE
 	const sz_t i = id % VSIZE, j = (id / VSIZE + 1) & (NSIZE / CSIZE - 1);
 	const uint32 b = bb_inv[i].s0, b_inv = bb_inv[i].s1;
 	const int32 b_s = bs[i];
