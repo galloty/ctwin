@@ -883,4 +883,227 @@ static const char * const src_ocl_kernel = \
 "	const sz_t k = k0 + c * VSIZE;\n" \
 "	x12[k] = add_P12(x12[k], (uint32_2)(seti_P1((int32)a), seti_P2((int32)a))); x3[k] = add_P3(x3[k], seti_P3((int32)a));\n" \
 "}\n" \
+"\n" \
+"__kernel\n" \
+"void add_throughput(__global uint32 * restrict const data, __global uint32 * restrict const res)\n" \
+"{\n" \
+"#ifdef __NV_CL_C_VERSION\n" \
+"	uint64 t0 = 0, t1 = 0;\n" \
+"	__global uint32 * const pdata = data;\n" \
+"	__global uint32 * const pres = res;\n" \
+"	uint32 r[8];\n" \
+" 	for (sz_t i = 0; i < 8; ++i) r[i] = pdata[i];\n" \
+"\n" \
+"	barrier(CLK_GLOBAL_MEM_FENCE);\n" \
+"	asm volatile (\"mov.u64 %0, %%clock64;\" : \"=l\"(t0) :: \"memory\");\n" \
+"	const uint32 p = (uint32)t0;\n" \
+"	for (sz_t j = 0; j < 65536; ++j)\n" \
+"	{\n" \
+"		for (sz_t i = 0; i < 8; ++i) r[i] = _addMod(r[i], r[i], p);\n" \
+"	}\n" \
+"	asm volatile (\"mov.u64 %0, %%clock64;\" : \"=l\"(t1) :: \"memory\");\n" \
+"	barrier(CLK_GLOBAL_MEM_FENCE);\n" \
+"\n" \
+"	for (sz_t i = 0; i < 8; ++i) pdata[i] = r[i] + (uint32)t1;\n" \
+"	pres[0] = (uint32)(t1 - t0);\n" \
+"#else\n" \
+"	res[0] = 0;\n" \
+"#endif\n" \
+"}\n" \
+"\n" \
+"__kernel\n" \
+"void add_latency(__global uint32 * restrict const data, __global uint32 * restrict const res)\n" \
+"{\n" \
+"#ifdef __NV_CL_C_VERSION\n" \
+"	uint64 t0 = 0, t1 = 0;\n" \
+"	__global uint32 * const pdata = data;\n" \
+"	__global uint32 * const pres = res;\n" \
+" 	uint32 r = pdata[0];\n" \
+"\n" \
+"	barrier(CLK_GLOBAL_MEM_FENCE);\n" \
+"	asm volatile (\"mov.u64 %0, %%clock64;\" : \"=l\"(t0) :: \"memory\");\n" \
+"	const uint32 p = (uint32)t0;\n" \
+"	for (sz_t j = 0; j < 65536; ++j)\n" \
+"	{\n" \
+"		for (sz_t i = 0; i < 8; ++i) r = _addMod(r, r, p);\n" \
+"	}\n" \
+"	asm volatile (\"mov.u64 %0, %%clock64;\" : \"=l\"(t1) :: \"memory\");\n" \
+"	barrier(CLK_GLOBAL_MEM_FENCE);\n" \
+"\n" \
+"	pdata[0] = r + (uint32)t1;\n" \
+"	pres[0] = (uint32)(t1 - t0);\n" \
+"#else\n" \
+"	res[0] = 0;\n" \
+"#endif\n" \
+"}\n" \
+"\n" \
+"__kernel\n" \
+"void sub_throughput(__global uint32 * restrict const data, __global uint32 * restrict const res)\n" \
+"{\n" \
+"#ifdef __NV_CL_C_VERSION\n" \
+"	uint64 t0 = 0, t1 = 0;\n" \
+"	__global uint32 * const pdata = data;\n" \
+"	__global uint32 * const pres = res;\n" \
+"	uint32 r[16];\n" \
+" 	for (sz_t i = 0; i < 16; ++i) r[i] = pdata[i];\n" \
+"\n" \
+"	barrier(CLK_GLOBAL_MEM_FENCE);\n" \
+"	asm volatile (\"mov.u64 %0, %%clock64;\" : \"=l\"(t0) :: \"memory\");\n" \
+"	const uint32 p = (uint32)t0;\n" \
+"	for (sz_t j = 0; j < 65536; ++j)\n" \
+"	{\n" \
+"		for (sz_t i = 0; i < 8; ++i) r[i] = _subMod(r[i], r[i + 8], p);\n" \
+"	}\n" \
+"	asm volatile (\"mov.u64 %0, %%clock64;\" : \"=l\"(t1) :: \"memory\");\n" \
+"	barrier(CLK_GLOBAL_MEM_FENCE);\n" \
+"\n" \
+"	for (sz_t i = 0; i < 8; ++i) pdata[i] = r[i] + (uint32)t1;\n" \
+"	pres[0] = (uint32)(t1 - t0);\n" \
+"#else\n" \
+"	res[0] = 0;\n" \
+"#endif\n" \
+"}\n" \
+"\n" \
+"__kernel\n" \
+"void sub_latency(__global uint32 * restrict const data, __global uint32 * restrict const res)\n" \
+"{\n" \
+"#ifdef __NV_CL_C_VERSION\n" \
+"	uint64 t0 = 0, t1 = 0;\n" \
+"	__global uint32 * const pdata = data;\n" \
+"	__global uint32 * const pres = res;\n" \
+" 	uint32 r = pdata[0], rs = pdata[1];\n" \
+"\n" \
+"	barrier(CLK_GLOBAL_MEM_FENCE);\n" \
+"	asm volatile (\"mov.u64 %0, %%clock64;\" : \"=l\"(t0) :: \"memory\");\n" \
+"	const uint32 p = (uint32)t0;\n" \
+"	for (sz_t j = 0; j < 65536; ++j)\n" \
+"	{\n" \
+"		for (sz_t i = 0; i < 8; ++i) r = _subMod(r, rs, p);\n" \
+"	}\n" \
+"	asm volatile (\"mov.u64 %0, %%clock64;\" : \"=l\"(t1) :: \"memory\");\n" \
+"	barrier(CLK_GLOBAL_MEM_FENCE);\n" \
+"\n" \
+"	pdata[0] = r + (uint32)t1;\n" \
+"	pres[0] = (uint32)(t1 - t0);\n" \
+"#else\n" \
+"	res[0] = 0;\n" \
+"#endif\n" \
+"}\n" \
+"\n" \
+"__kernel\n" \
+"void mul_throughput(__global uint32 * restrict const data, __global uint32 * restrict const res)\n" \
+"{\n" \
+"#ifdef __NV_CL_C_VERSION\n" \
+"	uint64 t0 = 0, t1 = 0;\n" \
+"	__global uint32 * const pdata = data;\n" \
+"	__global uint32 * const pres = res;\n" \
+"	uint32 r[8];\n" \
+" 	for (sz_t i = 0; i < 8; ++i) r[i] = pdata[i];\n" \
+"\n" \
+"	barrier(CLK_GLOBAL_MEM_FENCE);\n" \
+"	asm volatile (\"mov.u64 %0, %%clock64;\" : \"=l\"(t0) :: \"memory\");\n" \
+"	const uint32 p = (uint32)t0, q = (uint32)(t0 >> 32);\n" \
+"	for (sz_t j = 0; j < 65536; ++j)\n" \
+"	{\n" \
+"		for (sz_t i = 0; i < 8; ++i) r[i] = _mulMonty(r[i], r[i], p, q);\n" \
+"	}\n" \
+"	asm volatile (\"mov.u64 %0, %%clock64;\" : \"=l\"(t1) :: \"memory\");\n" \
+"	barrier(CLK_GLOBAL_MEM_FENCE);\n" \
+"\n" \
+"	for (sz_t i = 0; i < 8; ++i) pdata[i] = r[i] + (uint32)t1;\n" \
+"	pres[0] = (uint32)(t1 - t0);\n" \
+"#else\n" \
+"	res[0] = 0;\n" \
+"#endif\n" \
+"}\n" \
+"\n" \
+"__kernel\n" \
+"void mul_latency(__global uint32 * restrict const data, __global uint32 * restrict const res)\n" \
+"{\n" \
+"#ifdef __NV_CL_C_VERSION\n" \
+"	uint64 t0 = 0, t1 = 0;\n" \
+"	__global uint32 * const pdata = data;\n" \
+"	__global uint32 * const pres = res;\n" \
+" 	uint32 r = pdata[0];\n" \
+"\n" \
+"	barrier(CLK_GLOBAL_MEM_FENCE);\n" \
+"	asm volatile (\"mov.u64 %0, %%clock64;\" : \"=l\"(t0) :: \"memory\");\n" \
+"	const uint32 p = (uint32)t0, q = (uint32)(t0 >> 32);\n" \
+"	for (sz_t j = 0; j < 65536; ++j)\n" \
+"	{\n" \
+"		for (sz_t i = 0; i < 8; ++i) r = _mulMonty(r, r, p, q);\n" \
+"	}\n" \
+"	asm volatile (\"mov.u64 %0, %%clock64;\" : \"=l\"(t1) :: \"memory\");\n" \
+"	barrier(CLK_GLOBAL_MEM_FENCE);\n" \
+"\n" \
+"	pdata[0] = r + (uint32)t1;\n" \
+"	pres[0] = (uint32)(t1 - t0);\n" \
+"#else\n" \
+"	res[0] = 0;\n" \
+"#endif\n" \
+"}\n" \
+"\n" \
+"__kernel\n" \
+"void but_throughput(__global uint32 * restrict const data, __global uint32 * restrict const res)\n" \
+"{\n" \
+"#ifdef __NV_CL_C_VERSION\n" \
+"	uint64 t0 = 0, t1 = 0;\n" \
+"	__global uint32 * const pdata = data;\n" \
+"	__global uint32 * const pres = res;\n" \
+"	uint32 r[16];\n" \
+" 	for (sz_t i = 0; i < 16; ++i) r[i] = pdata[i];\n" \
+"	const uint32 c = pdata[16];\n" \
+"\n" \
+"	barrier(CLK_GLOBAL_MEM_FENCE);\n" \
+"	asm volatile (\"mov.u64 %0, %%clock64;\" : \"=l\"(t0) :: \"memory\");\n" \
+"	const uint32 p = (uint32)t0, q = (uint32)(t0 >> 32);\n" \
+"	for (sz_t j = 0; j < 65536; ++j)\n" \
+"	{\n" \
+"		for (sz_t i = 0; i < 8; ++i)\n" \
+"		{\n" \
+"			const uint32 u0 = r[i + 0], u1 = _mulMonty(r[i + 8], c, p, q);\n" \
+"			r[i + 0] = u0 + u1; r[i + 8] = u0 - u1;\n" \
+"		}\n" \
+"	}\n" \
+"	asm volatile (\"mov.u64 %0, %%clock64;\" : \"=l\"(t1) :: \"memory\");\n" \
+"	barrier(CLK_GLOBAL_MEM_FENCE);\n" \
+"\n" \
+"	for (sz_t i = 0; i < 8; ++i) pdata[i] = r[i] + (uint32)t1;\n" \
+"	pres[0] = (uint32)(t1 - t0);\n" \
+"#else\n" \
+"	res[0] = 0;\n" \
+"#endif\n" \
+"}\n" \
+"\n" \
+"__kernel\n" \
+"void but_latency(__global uint32 * restrict const data, __global uint32 * restrict const res)\n" \
+"{\n" \
+"#ifdef __NV_CL_C_VERSION\n" \
+"	uint64 t0 = 0, t1 = 0;\n" \
+"	__global uint32 * const pdata = data;\n" \
+"	__global uint32 * const pres = res;\n" \
+"	uint32 r[2];\n" \
+" 	for (sz_t i = 0; i < 2; ++i) r[i] = pdata[i];\n" \
+"	const uint32 c = pdata[3];\n" \
+"\n" \
+"	barrier(CLK_GLOBAL_MEM_FENCE);\n" \
+"	asm volatile (\"mov.u64 %0, %%clock64;\" : \"=l\"(t0) :: \"memory\");\n" \
+"	const uint32 p = (uint32)t0, q = (uint32)(t0 >> 32);\n" \
+"	for (sz_t j = 0; j < 65536; ++j)\n" \
+"	{\n" \
+"		for (sz_t i = 0; i < 8; ++i)\n" \
+"		{\n" \
+"			const uint32 u0 = r[0], u1 = _mulMonty(r[1], c, p, q);\n" \
+"			r[0] = u0 + u1; r[1] = u0 - u1;\n" \
+"		}\n" \
+"	}\n" \
+"	asm volatile (\"mov.u64 %0, %%clock64;\" : \"=l\"(t1) :: \"memory\");\n" \
+"	barrier(CLK_GLOBAL_MEM_FENCE);\n" \
+"\n" \
+"	for (sz_t i = 0; i < 2; ++i) pdata[i] = r[i] + (uint32)t1;\n" \
+"	pres[0] = (uint32)(t1 - t0);\n" \
+"#else\n" \
+"	res[0] = 0;\n" \
+"#endif\n" \
+"}\n" \
 "";

@@ -483,4 +483,11 @@ public:
 		elapsedTime = chrono.getElapsedTime();
 		return true;
 	}
+
+public:
+	void bench()
+	{
+		createTransform(4);
+		_transform->bench();
+	}
 };

@@ -871,3 +871,226 @@ void normalize2(const __global uint32_2 * restrict const bb_inv, const __global 
 	const sz_t k = k0 + c * VSIZE;
 	x12[k] = add_P12(x12[k], (uint32_2)(seti_P1((int32)a), seti_P2((int32)a))); x3[k] = add_P3(x3[k], seti_P3((int32)a));
 }
+
+__kernel
+void add_throughput(__global uint32 * restrict const data, __global uint32 * restrict const res)
+{
+#ifdef __NV_CL_C_VERSION
+	uint64 t0 = 0, t1 = 0;
+	__global uint32 * const pdata = data;
+	__global uint32 * const pres = res;
+	uint32 r[8];
+ 	for (sz_t i = 0; i < 8; ++i) r[i] = pdata[i];
+
+	barrier(CLK_GLOBAL_MEM_FENCE);
+	asm volatile ("mov.u64 %0, %%clock64;" : "=l"(t0) :: "memory");
+	const uint32 p = (uint32)t0;
+	for (sz_t j = 0; j < 65536; ++j)
+	{
+		for (sz_t i = 0; i < 8; ++i) r[i] = _addMod(r[i], r[i], p);
+	}
+	asm volatile ("mov.u64 %0, %%clock64;" : "=l"(t1) :: "memory");
+	barrier(CLK_GLOBAL_MEM_FENCE);
+
+	for (sz_t i = 0; i < 8; ++i) pdata[i] = r[i] + (uint32)t1;
+	pres[0] = (uint32)(t1 - t0);
+#else
+	res[0] = 0;
+#endif
+}
+
+__kernel
+void add_latency(__global uint32 * restrict const data, __global uint32 * restrict const res)
+{
+#ifdef __NV_CL_C_VERSION
+	uint64 t0 = 0, t1 = 0;
+	__global uint32 * const pdata = data;
+	__global uint32 * const pres = res;
+ 	uint32 r = pdata[0];
+
+	barrier(CLK_GLOBAL_MEM_FENCE);
+	asm volatile ("mov.u64 %0, %%clock64;" : "=l"(t0) :: "memory");
+	const uint32 p = (uint32)t0;
+	for (sz_t j = 0; j < 65536; ++j)
+	{
+		for (sz_t i = 0; i < 8; ++i) r = _addMod(r, r, p);
+	}
+	asm volatile ("mov.u64 %0, %%clock64;" : "=l"(t1) :: "memory");
+	barrier(CLK_GLOBAL_MEM_FENCE);
+
+	pdata[0] = r + (uint32)t1;
+	pres[0] = (uint32)(t1 - t0);
+#else
+	res[0] = 0;
+#endif
+}
+
+__kernel
+void sub_throughput(__global uint32 * restrict const data, __global uint32 * restrict const res)
+{
+#ifdef __NV_CL_C_VERSION
+	uint64 t0 = 0, t1 = 0;
+	__global uint32 * const pdata = data;
+	__global uint32 * const pres = res;
+	uint32 r[16];
+ 	for (sz_t i = 0; i < 16; ++i) r[i] = pdata[i];
+
+	barrier(CLK_GLOBAL_MEM_FENCE);
+	asm volatile ("mov.u64 %0, %%clock64;" : "=l"(t0) :: "memory");
+	const uint32 p = (uint32)t0;
+	for (sz_t j = 0; j < 65536; ++j)
+	{
+		for (sz_t i = 0; i < 8; ++i) r[i] = _subMod(r[i], r[i + 8], p);
+	}
+	asm volatile ("mov.u64 %0, %%clock64;" : "=l"(t1) :: "memory");
+	barrier(CLK_GLOBAL_MEM_FENCE);
+
+	for (sz_t i = 0; i < 8; ++i) pdata[i] = r[i] + (uint32)t1;
+	pres[0] = (uint32)(t1 - t0);
+#else
+	res[0] = 0;
+#endif
+}
+
+__kernel
+void sub_latency(__global uint32 * restrict const data, __global uint32 * restrict const res)
+{
+#ifdef __NV_CL_C_VERSION
+	uint64 t0 = 0, t1 = 0;
+	__global uint32 * const pdata = data;
+	__global uint32 * const pres = res;
+ 	uint32 r = pdata[0], rs = pdata[1];
+
+	barrier(CLK_GLOBAL_MEM_FENCE);
+	asm volatile ("mov.u64 %0, %%clock64;" : "=l"(t0) :: "memory");
+	const uint32 p = (uint32)t0;
+	for (sz_t j = 0; j < 65536; ++j)
+	{
+		for (sz_t i = 0; i < 8; ++i) r = _subMod(r, rs, p);
+	}
+	asm volatile ("mov.u64 %0, %%clock64;" : "=l"(t1) :: "memory");
+	barrier(CLK_GLOBAL_MEM_FENCE);
+
+	pdata[0] = r + (uint32)t1;
+	pres[0] = (uint32)(t1 - t0);
+#else
+	res[0] = 0;
+#endif
+}
+
+__kernel
+void mul_throughput(__global uint32 * restrict const data, __global uint32 * restrict const res)
+{
+#ifdef __NV_CL_C_VERSION
+	uint64 t0 = 0, t1 = 0;
+	__global uint32 * const pdata = data;
+	__global uint32 * const pres = res;
+	uint32 r[8];
+ 	for (sz_t i = 0; i < 8; ++i) r[i] = pdata[i];
+
+	barrier(CLK_GLOBAL_MEM_FENCE);
+	asm volatile ("mov.u64 %0, %%clock64;" : "=l"(t0) :: "memory");
+	const uint32 p = (uint32)t0, q = (uint32)(t0 >> 32);
+	for (sz_t j = 0; j < 65536; ++j)
+	{
+		for (sz_t i = 0; i < 8; ++i) r[i] = _mulMonty(r[i], r[i], p, q);
+	}
+	asm volatile ("mov.u64 %0, %%clock64;" : "=l"(t1) :: "memory");
+	barrier(CLK_GLOBAL_MEM_FENCE);
+
+	for (sz_t i = 0; i < 8; ++i) pdata[i] = r[i] + (uint32)t1;
+	pres[0] = (uint32)(t1 - t0);
+#else
+	res[0] = 0;
+#endif
+}
+
+__kernel
+void mul_latency(__global uint32 * restrict const data, __global uint32 * restrict const res)
+{
+#ifdef __NV_CL_C_VERSION
+	uint64 t0 = 0, t1 = 0;
+	__global uint32 * const pdata = data;
+	__global uint32 * const pres = res;
+ 	uint32 r = pdata[0];
+
+	barrier(CLK_GLOBAL_MEM_FENCE);
+	asm volatile ("mov.u64 %0, %%clock64;" : "=l"(t0) :: "memory");
+	const uint32 p = (uint32)t0, q = (uint32)(t0 >> 32);
+	for (sz_t j = 0; j < 65536; ++j)
+	{
+		for (sz_t i = 0; i < 8; ++i) r = _mulMonty(r, r, p, q);
+	}
+	asm volatile ("mov.u64 %0, %%clock64;" : "=l"(t1) :: "memory");
+	barrier(CLK_GLOBAL_MEM_FENCE);
+
+	pdata[0] = r + (uint32)t1;
+	pres[0] = (uint32)(t1 - t0);
+#else
+	res[0] = 0;
+#endif
+}
+
+__kernel
+void but_throughput(__global uint32 * restrict const data, __global uint32 * restrict const res)
+{
+#ifdef __NV_CL_C_VERSION
+	uint64 t0 = 0, t1 = 0;
+	__global uint32 * const pdata = data;
+	__global uint32 * const pres = res;
+	uint32 r[16];
+ 	for (sz_t i = 0; i < 16; ++i) r[i] = pdata[i];
+	const uint32 c = pdata[16];
+
+	barrier(CLK_GLOBAL_MEM_FENCE);
+	asm volatile ("mov.u64 %0, %%clock64;" : "=l"(t0) :: "memory");
+	const uint32 p = (uint32)t0, q = (uint32)(t0 >> 32);
+	for (sz_t j = 0; j < 65536; ++j)
+	{
+		for (sz_t i = 0; i < 8; ++i)
+		{
+			const uint32 u0 = r[i + 0], u1 = _mulMonty(r[i + 8], c, p, q);
+			r[i + 0] = u0 + u1; r[i + 8] = u0 - u1;
+		}
+	}
+	asm volatile ("mov.u64 %0, %%clock64;" : "=l"(t1) :: "memory");
+	barrier(CLK_GLOBAL_MEM_FENCE);
+
+	for (sz_t i = 0; i < 8; ++i) pdata[i] = r[i] + (uint32)t1;
+	pres[0] = (uint32)(t1 - t0);
+#else
+	res[0] = 0;
+#endif
+}
+
+__kernel
+void but_latency(__global uint32 * restrict const data, __global uint32 * restrict const res)
+{
+#ifdef __NV_CL_C_VERSION
+	uint64 t0 = 0, t1 = 0;
+	__global uint32 * const pdata = data;
+	__global uint32 * const pres = res;
+	uint32 r[2];
+ 	for (sz_t i = 0; i < 2; ++i) r[i] = pdata[i];
+	const uint32 c = pdata[3];
+
+	barrier(CLK_GLOBAL_MEM_FENCE);
+	asm volatile ("mov.u64 %0, %%clock64;" : "=l"(t0) :: "memory");
+	const uint32 p = (uint32)t0, q = (uint32)(t0 >> 32);
+	for (sz_t j = 0; j < 65536; ++j)
+	{
+		for (sz_t i = 0; i < 8; ++i)
+		{
+			const uint32 u0 = r[0], u1 = _mulMonty(r[1], c, p, q);
+			r[0] = u0 + u1; r[1] = u0 - u1;
+		}
+	}
+	asm volatile ("mov.u64 %0, %%clock64;" : "=l"(t1) :: "memory");
+	barrier(CLK_GLOBAL_MEM_FENCE);
+
+	for (sz_t i = 0; i < 2; ++i) pdata[i] = r[i] + (uint32)t1;
+	pres[0] = (uint32)(t1 - t0);
+#else
+	res[0] = 0;
+#endif
+}

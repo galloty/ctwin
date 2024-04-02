@@ -101,7 +101,7 @@ private:
 #endif
 
 		std::ostringstream ss;
-		ss << "cyclo 24.03.3 (" << sysver << ssc.str() << ")" << std::endl;
+		ss << "cyclo 24.03.99 (" << sysver << ssc.str() << ")" << std::endl;
 		ss << "Copyright (c) 2023, Yves Gallot" << std::endl;
 		ss << "ctwin is free source code, under the MIT license." << std::endl;
 		if (nl)
@@ -222,8 +222,15 @@ public:
 			}
 		}
 
-		if (n == 0) return;
-		if (filename.empty()) return;
+		if ((n == 0) || filename.empty())
+		{
+			cyclo & app = cyclo::getInstance();
+			engine eng(platform, d, true);
+			app.init(8, eng, false);
+			app.bench();
+			app.release();
+			return;
+		}
 
 #if defined(BOINC)
 		if (bBoinc && !boinc_is_standalone() && !ext_device)

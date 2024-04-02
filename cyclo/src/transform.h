@@ -422,8 +422,11 @@ public:
 			this->_csize = csize;
 		}
 
-		std::ostringstream ss; ss << "Chunk size = " << this->_csize << std::endl << std::endl;
-		pio::print(ss.str());
+		if (this->_csize > 4)
+		{
+			std::ostringstream ss; ss << "Chunk size = " << this->_csize << std::endl << std::endl;
+			pio::print(ss.str());
+		}
 
 		engine.setProfiling(false);
 		initEngine();
@@ -649,5 +652,37 @@ public:
 			}
 		}
 		return success;
+	}
+
+public:
+	void bench() const
+	{
+		uint32 res[8];
+		_engine.bench_add_throughput(res);
+		if (res[0] != 0)
+		{
+			const double n = 8.0 * 65536;
+			const double at = res[0] / n;
+			_engine.bench_add_latency(res);
+			const double al = res[0] / n;
+			_engine.bench_sub_throughput(res);
+			const double st = res[0] / n;
+			_engine.bench_sub_latency(res);
+			const double sl = res[0] / n;
+			_engine.bench_mul_throughput(res);
+			const double mt = res[0] / n;
+			_engine.bench_mul_latency(res);
+			const double ml = res[0] / n;
+			_engine.bench_but_throughput(res);
+			const double bt = res[0] / n;
+			_engine.bench_but_latency(res);
+			const double bl = res[0] / n;
+			std::ostringstream ss; ss << "Bench: throughput (latency)" << std::endl;
+			ss << " add_mod: " << at << " (" << al << ")" << std::endl;
+			ss << " sub_mod: " << st << " (" << sl << ")" << std::endl;
+			ss << " mul_mod: " << mt << " (" << ml << ")" << std::endl;
+			ss << " radix-2 butterfly: " << bt << " (" << bl << ")." << std::endl << std::endl;
+			pio::print(ss.str());
+		}
 	}
 };

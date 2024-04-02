@@ -26,12 +26,15 @@ private:
 	size_t _nsize = 0, _vnsize = 0, _vn_csize = 0;
 	cl_mem _x12 = nullptr, _x3 = nullptr;
 	cl_mem _wr12 = nullptr, _wr3 = nullptr, _wri12 = nullptr, _wri3 = nullptr, _bb_inv = nullptr, _bs = nullptr, _f = nullptr;
+	cl_mem _data = nullptr, _res = nullptr;
 	cl_kernel _set = nullptr, _copy = nullptr;
 	cl_kernel _square2 = nullptr, _square4 = nullptr, _square8 = nullptr, _square16 = nullptr;
 	cl_kernel _mul2 = nullptr, _mul4 = nullptr;
 	cl_kernel _forward4 = nullptr, _forward16 = nullptr, _forward16_0 = nullptr;
 	cl_kernel _backward4 = nullptr, _backward16 = nullptr, _backward16_0 = nullptr;
 	cl_kernel _normalize1 = nullptr, _normalize2 = nullptr;
+	cl_kernel _add_throughput = nullptr, _add_latency = nullptr, _sub_throughput = nullptr, _sub_latency = nullptr;
+	cl_kernel _mul_throughput = nullptr, _mul_latency = nullptr, _but_throughput = nullptr, _but_latency = nullptr;
 
 public:
 	engine(const ocl::platform & platform, const size_t d, const bool verbose) : ocl::device(platform, d, verbose) {}
@@ -57,6 +60,8 @@ public:
 		_bb_inv = _createBuffer(CL_MEM_READ_ONLY, sizeof(uint32_2) * VSIZE);
 		_bs = _createBuffer(CL_MEM_READ_ONLY, sizeof(int32) * VSIZE);
 		_f = _createBuffer(CL_MEM_READ_WRITE, sizeof(int64) * _vn_csize);
+		_data = _createBuffer(CL_MEM_READ_WRITE, sizeof(uint32) * 64);
+		_res = _createBuffer(CL_MEM_READ_WRITE, sizeof(uint32) * 8);
 	}
 
 public:
@@ -71,6 +76,7 @@ public:
 			_releaseBuffer(_x12); _releaseBuffer(_x3);
 			_releaseBuffer(_wr12); _releaseBuffer(_wr3); _releaseBuffer(_wri12); _releaseBuffer(_wri3);
 			_releaseBuffer(_bb_inv); _releaseBuffer(_bs); _releaseBuffer(_f);
+			_releaseBuffer(_data); _releaseBuffer(_res);
 			_nsize = _vnsize = _vn_csize = 0;
 		}
 	}
@@ -115,6 +121,13 @@ private:
 		_setKernelArg(kernel, 4, sizeof(cl_mem), &_x3);
 	}
 
+	void createKernel_bench(cl_kernel & kernel, const char * const name)
+	{
+		kernel = _createKernel(name);
+		_setKernelArg(kernel, 0, sizeof(cl_mem), &_data);
+		_setKernelArg(kernel, 1, sizeof(cl_mem), &_res);
+	}
+
 public:
 	void createKernels()
 	{
@@ -143,6 +156,15 @@ public:
 
 		createKernel_normalize(_normalize1, "normalize1");
 		createKernel_normalize(_normalize2, "normalize2");
+
+		createKernel_bench(_add_throughput, "add_throughput");
+		createKernel_bench(_add_latency, "add_latency");
+		createKernel_bench(_sub_throughput, "sub_throughput");
+		createKernel_bench(_sub_latency, "sub_latency");
+		createKernel_bench(_mul_throughput, "mul_throughput");
+		createKernel_bench(_mul_latency, "mul_latency");
+		createKernel_bench(_but_throughput, "but_throughput");
+		createKernel_bench(_but_latency, "but_latency");
 	}
 
 public:
@@ -158,6 +180,8 @@ public:
 		_releaseKernel(_forward4); _releaseKernel(_forward16); _releaseKernel(_forward16_0);
 		_releaseKernel(_backward4); _releaseKernel(_backward16); _releaseKernel(_backward16_0);
 		_releaseKernel(_normalize1); _releaseKernel(_normalize2);
+		_releaseKernel(_add_throughput); _releaseKernel(_add_latency); _releaseKernel(_sub_throughput); _releaseKernel(_sub_latency);
+		_releaseKernel(_mul_throughput); _releaseKernel(_mul_latency); _releaseKernel(_but_throughput); _releaseKernel(_but_latency);
 	}
 
 public:
@@ -192,6 +216,9 @@ public:
 		_readBuffer(_x12, x12, sizeof(uint32_2) * size);
 		_readBuffer(_x3, x3, sizeof(uint32) * size);
 	}
+
+private:
+	void readMemory_res(uint32 * const res) { _readBuffer(_res, res, sizeof(uint32) * 8); }
 
 public:
 	void set(const uint32 a)
@@ -315,17 +342,17 @@ private:
 public:
 	void squareDup(const int32 ln, const uint64 & dup)
 	{
-		forward16_0();
+		forward16_0(); /*std::cout << "forward16_0 ";*/
 		uint32 s = 16; int32 lm = ln - 4;
-		for (; lm > 4; s *= 16, lm -= 4) forward16(s, lm - 4);
-		if      (lm == 1) square2();
-		else if (lm == 2) square4();
-		else if (lm == 3) square8();
-		else if (lm == 4) square16();
-		for (s /= 16, lm += 4; s > 1; s /= 16, lm += 4) backward16(s, lm - 4);
-		backward16_0();
-		normalize1(dup);
-		normalize2();
+		for (; lm > 4; s *= 16, lm -= 4) { forward16(s, lm - 4); /*std::cout << "forward16 ";*/ }
+		if      (lm == 1) { square2(); /*std::cout << "square2 ";*/ }
+		else if (lm == 2) { square4(); /*std::cout << "square4 ";*/ }
+		else if (lm == 3) { square8(); /*std::cout << "square8 ";*/ }
+		else if (lm == 4) { square16(); /*std::cout << "square16 ";*/ }
+		for (s /= 16, lm += 4; s > 1; s /= 16, lm += 4) { backward16(s, lm - 4); /*std::cout << "backward16 ";*/ }
+		backward16_0(); /*std::cout << "backward16_0 ";*/
+		normalize1(dup); /*std::cout << "normalize1 ";*/
+		normalize2(); /*std::cout << "normalize2" << std::endl;*/
 	}
 
 	void mul(const int32 ln)
@@ -340,5 +367,46 @@ public:
 		backward16_0();
 		normalize1(0);
 		normalize2();
+	}
+
+	void bench_add_throughput(uint32 * const res)
+	{
+		_executeKernel(_add_throughput, 1);
+ 		readMemory_res(res);
+	}
+	void bench_add_latency(uint32 * const res)
+	{
+		_executeKernel(_add_latency, 1);
+ 		readMemory_res(res);
+	}
+	void bench_sub_throughput(uint32 * const res)
+	{
+		_executeKernel(_sub_throughput, 1);
+ 		readMemory_res(res);
+	}
+	void bench_sub_latency(uint32 * const res)
+	{
+		_executeKernel(_sub_latency, 1);
+ 		readMemory_res(res);
+	}
+	void bench_mul_throughput(uint32 * const res)
+	{
+		_executeKernel(_mul_throughput, 1);
+ 		readMemory_res(res);
+	}
+	void bench_mul_latency(uint32 * const res)
+	{
+		_executeKernel(_mul_latency, 1);
+ 		readMemory_res(res);
+	}
+	void bench_but_throughput(uint32 * const res)
+	{
+		_executeKernel(_but_throughput, 1);
+ 		readMemory_res(res);
+	}
+	void bench_but_latency(uint32 * const res)
+	{
+		_executeKernel(_but_latency, 1);
+ 		readMemory_res(res);
 	}
 };
