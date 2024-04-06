@@ -75,8 +75,10 @@ static const char * const src_ocl_kernel = \
 "\n" \
 "inline uint96 uint96_mul_64_32(const uint64 x, const uint32 y)\n" \
 "{\n" \
-"	const uint64 l = (uint32)x * (uint64)y, h = (x >> 32) * y + (l >> 32);\n" \
-"	uint96 r; r.s0 = (h << 32) | (uint32)l; r.s1 = (uint32)(h >> 32);\n" \
+"	const uint32 x_lo = (uint32)x, x_hi = (uint32)(x >> 32);\n" \
+"	const uint32 l_lo = x_lo * y, l_hi = mul_hi(x_lo, y);\n" \
+"	const uint64 h = x_hi * (uint64)y + l_hi;\n" \
+"	uint96 r; r.s0 = (h << 32) | l_lo; r.s1 = (uint32)(h >> 32);\n" \
 "	return r;\n" \
 "}\n" \
 "\n" \
@@ -107,8 +109,8 @@ static const char * const src_ocl_kernel = \
 "// Montgomery form (lhs, rhs and output): if 0 <= r < p then f is r * 2^32 mod p\n" \
 "inline uint32 _mulMonty(const uint32 lhs, const uint32 rhs, const uint32 p, const uint32 q)\n" \
 "{\n" \
-"	const uint64 t = lhs * (uint64)rhs;\n" \
-"	const uint32 mp = mul_hi((uint32)t * q, p), t_hi = (uint32)(t >> 32), r = t_hi - mp;\n" \
+"	const uint32 t_lo = lhs * rhs, t_hi = mul_hi(lhs, rhs);\n" \
+"	const uint32 mp = mul_hi(t_lo * q, p), r = t_hi - mp;\n" \
 "	return (t_hi < mp) ? r + p : r;\n" \
 "}\n" \
 "\n" \
@@ -891,15 +893,16 @@ static const char * const src_ocl_kernel = \
 "	uint64 t0 = 0, t1 = 0;\n" \
 "	__global uint32 * const pdata = data;\n" \
 "	__global uint32 * const pres = res;\n" \
-"	uint32 r[8];\n" \
-" 	for (sz_t i = 0; i < 8; ++i) r[i] = pdata[i];\n" \
+"	uint32 r[16];\n" \
+" 	for (sz_t i = 0; i < 16; ++i) r[i] = pdata[i];\n" \
 "\n" \
 "	barrier(CLK_GLOBAL_MEM_FENCE);\n" \
 "	asm volatile (\"mov.u64 %0, %%clock64;\" : \"=l\"(t0) :: \"memory\");\n" \
 "	const uint32 p = (uint32)t0;\n" \
-"	for (sz_t j = 0; j < 65536; ++j)\n" \
+"	for (sz_t j = 0; j < 65536/2; ++j)\n" \
 "	{\n" \
-"		for (sz_t i = 0; i < 8; ++i) r[i] = _addMod(r[i], r[i], p);\n" \
+"		for (sz_t i = 0; i < 8; ++i) r[i] = _addMod(r[i], r[i + 8], p);\n" \
+"		for (sz_t i = 0; i < 8; ++i) r[i + 8] = _addMod(r[i + 8], r[i], p);\n" \
 "	}\n" \
 "	asm volatile (\"mov.u64 %0, %%clock64;\" : \"=l\"(t1) :: \"memory\");\n" \
 "	barrier(CLK_GLOBAL_MEM_FENCE);\n" \
@@ -918,14 +921,14 @@ static const char * const src_ocl_kernel = \
 "	uint64 t0 = 0, t1 = 0;\n" \
 "	__global uint32 * const pdata = data;\n" \
 "	__global uint32 * const pres = res;\n" \
-" 	uint32 r = pdata[0];\n" \
+" 	uint32 r = pdata[0], ra = pdata[1];\n" \
 "\n" \
 "	barrier(CLK_GLOBAL_MEM_FENCE);\n" \
 "	asm volatile (\"mov.u64 %0, %%clock64;\" : \"=l\"(t0) :: \"memory\");\n" \
 "	const uint32 p = (uint32)t0;\n" \
-"	for (sz_t j = 0; j < 65536; ++j)\n" \
+"	for (sz_t j = 0; j < 65536/2; ++j)\n" \
 "	{\n" \
-"		for (sz_t i = 0; i < 8; ++i) r = _addMod(r, r, p);\n" \
+"		for (sz_t i = 0; i < 8; ++i) { r = _addMod(r, ra, p); ra = _addMod(ra, r, p); }\n" \
 "	}\n" \
 "	asm volatile (\"mov.u64 %0, %%clock64;\" : \"=l\"(t1) :: \"memory\");\n" \
 "	barrier(CLK_GLOBAL_MEM_FENCE);\n" \
@@ -1062,7 +1065,7 @@ static const char * const src_ocl_kernel = \
 "		for (sz_t i = 0; i < 8; ++i)\n" \
 "		{\n" \
 "			const uint32 u0 = r[i + 0], u1 = _mulMonty(r[i + 8], c, p, q);\n" \
-"			r[i + 0] = u0 + u1; r[i + 8] = u0 - u1;\n" \
+"			r[i + 0] = _addMod(u0, u1, p); r[i + 8] = _subMod(u0, u1, p);\n" \
 "		}\n" \
 "	}\n" \
 "	asm volatile (\"mov.u64 %0, %%clock64;\" : \"=l\"(t1) :: \"memory\");\n" \
@@ -1084,7 +1087,7 @@ static const char * const src_ocl_kernel = \
 "	__global uint32 * const pres = res;\n" \
 "	uint32 r[2];\n" \
 " 	for (sz_t i = 0; i < 2; ++i) r[i] = pdata[i];\n" \
-"	const uint32 c = pdata[3];\n" \
+"	const uint32 c = pdata[2];\n" \
 "\n" \
 "	barrier(CLK_GLOBAL_MEM_FENCE);\n" \
 "	asm volatile (\"mov.u64 %0, %%clock64;\" : \"=l\"(t0) :: \"memory\");\n" \
@@ -1094,7 +1097,7 @@ static const char * const src_ocl_kernel = \
 "		for (sz_t i = 0; i < 8; ++i)\n" \
 "		{\n" \
 "			const uint32 u0 = r[0], u1 = _mulMonty(r[1], c, p, q);\n" \
-"			r[0] = u0 + u1; r[1] = u0 - u1;\n" \
+"			r[0] = _addMod(u0, u1, p); r[1] = _subMod(u0, u1, p);\n" \
 "		}\n" \
 "	}\n" \
 "	asm volatile (\"mov.u64 %0, %%clock64;\" : \"=l\"(t1) :: \"memory\");\n" \
