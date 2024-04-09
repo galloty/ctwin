@@ -16,6 +16,8 @@ typedef ulong	uint64;
 typedef long 	int64;
 typedef uint2	uint32_2;
 
+typedef struct { uint32 r1; uint32 r2; uint32 r3; } uint32_3;
+
 typedef struct { uint64 s0; uint32 s1; } uint96;
 typedef struct { uint64 s0; int32  s1; } int96;
 
@@ -135,6 +137,12 @@ inline uint32_2 half_P12(const uint32_2 lhs) { return (uint32_2)(half_P1(lhs.s0)
 inline uint32_2 mul_P12(const uint32_2 lhs, const uint32_2 rhs) { return (uint32_2)(mul_P1(lhs.s0, rhs.s0), mul_P2(lhs.s1, rhs.s1)); }
 inline uint32_2 toMonty_P12(const uint32_2 lhs) { return (uint32_2)(toMonty_P1(lhs.s0), toMonty_P2(lhs.s1)); }
 
+inline uint32_3 add_P123(const uint32_3 lhs, const uint32_3 rhs) { const uint32_3 r = { add_P1(lhs.r1, rhs.r1), add_P2(lhs.r2, rhs.r2), add_P3(lhs.r3, rhs.r3) }; return r; }
+inline uint32_3 sub_P123(const uint32_3 lhs, const uint32_3 rhs) { const uint32_3 r = { sub_P1(lhs.r1, rhs.r1), sub_P2(lhs.r2, rhs.r2), sub_P3(lhs.r3, rhs.r3) }; return r; }
+inline uint32_3 half_P123(const uint32_3 lhs) { const uint32_3 r = { half_P1(lhs.r1), half_P2(lhs.r2), half_P3(lhs.r3) }; return r; }
+inline uint32_3 mul_P123(const uint32_3 lhs, const uint32_3 rhs) { const uint32_3 r = { mul_P1(lhs.r1, rhs.r1), mul_P2(lhs.r2, rhs.r2), mul_P3(lhs.r3, rhs.r3) }; return r; }
+inline uint32_3 toMonty_P123(const uint32_3 lhs) { const uint32_3 r = { toMonty_P1(lhs.r1), toMonty_P2(lhs.r2), toMonty_P3(lhs.r3) }; return r; }
+
 inline static int96 garner3(const uint32 r1, const uint32 r2, const uint32 r3)
 {
 	const uint32 u13 = mul_P1(sub_P1(r1, r3), InvP3_P1);
@@ -164,202 +172,174 @@ __constant uint64 mask64[64] = {
 	0x0100000000000000ul, 0x0200000000000000ul, 0x0400000000000000ul, 0x0800000000000000ul,
 	0x1000000000000000ul, 0x2000000000000000ul, 0x4000000000000000ul, 0x8000000000000000ul };
 
-inline void frwd2_P123(uint32_2 * const u_P12, uint32 * const u_P3, const uint32_2 w12, const uint32 w3)
+inline uint32_3 read_P123(const __global uint32_2 * const x12, const __global uint32 * const x3, const sz_t k)
 {
-	const uint32_2 u1w_P12 = mul_P12(u_P12[1], w12); const uint32 u1w_P3 = mul_P3(u_P3[1], w3);
-	u_P12[1] = sub_P12(u_P12[0], u1w_P12); u_P3[1] = sub_P3(u_P3[0], u1w_P3);
-	u_P12[0] = add_P12(u_P12[0], u1w_P12); u_P3[0] = add_P3(u_P3[0], u1w_P3);
+	const uint32_2 t = x12[k]; const uint32_3 r = { t.s0, t.s1, x3[k] }; return r;
 }
 
-inline void bkwd2_P123(uint32_2 * const u_P12, uint32 * const u_P3, const uint32_2 wi12, const uint32 wi3)
+inline void frwd2_P123(uint32_3 * const u, const uint32_3 w)
 {
-	const uint32_2 v1_P12 = sub_P12(u_P12[0], u_P12[1]); const uint32 v1_P3 = sub_P3(u_P3[0], u_P3[1]);
-	u_P12[0] = add_P12(u_P12[0], u_P12[1]); u_P3[0] = add_P3(u_P3[0], u_P3[1]);
-	u_P12[1] = mul_P12(v1_P12, wi12); u_P3[1] = mul_P3(v1_P3, wi3);
+	const uint32_3 u1w = mul_P123(u[1], w);
+	u[1] = sub_P123(u[0], u1w); u[0] = add_P123(u[0], u1w);
 }
 
-inline void sqr2_P123(uint32_2 * const u_P12, uint32 * const u_P3, const uint32_2 w12, const uint32 w3)
+inline void bkwd2_P123(uint32_3 * const u, const uint32_3 wi)
 {
-	const uint32_2 u1w_P12 = mul_P12(u_P12[1], w12); const uint32 u1w_P3 = mul_P3(u_P3[1], w3);
-	u_P12[1] = mul_P12(add_P12(u_P12[0], u_P12[0]), u_P12[1]); u_P3[1] = mul_P3(add_P3(u_P3[0], u_P3[0]), u_P3[1]);
-	u_P12[0] = add_P12(mul_P12(u_P12[0], u_P12[0]), mul_P12(u1w_P12, u1w_P12)); u_P3[0] = add_P3(mul_P3(u_P3[0], u_P3[0]), mul_P3(u1w_P3, u1w_P3));
+	const uint32_3 v1 = sub_P123(u[0], u[1]);
+	u[0] = add_P123(u[0], u[1]); u[1] = mul_P123(v1, wi);
 }
 
-inline void read2_P123(uint32_2 * const u_P12, uint32 * const u_P3, const __global uint32_2 * const x12, const __global uint32 * const x3, const sz_t k, const uint32 m)
+inline void sqr2_P123(uint32_3 * const u, const uint32_3 w)
 {
-	for (sz_t h = 0; h < 2; ++h) { u_P12[h] = x12[k + h * VSIZE * m]; u_P3[h] = x3[k + h * VSIZE * m]; }
+	const uint32_3 u1w = mul_P123(u[1], w);
+	u[1] = mul_P123(add_P123(u[0], u[0]), u[1]);
+	u[0] = add_P123(mul_P123(u[0], u[0]), mul_P123(u1w, u1w));
 }
 
-inline void write2_P123(__global uint32_2 * const x12, __global uint32 * const x3, const uint32_2 * const u_P12, const uint32 * const u_P3, const sz_t k, const uint32 m)
+inline void read2_P123(uint32_3 * const u, const __global uint32_2 * const x12, const __global uint32 * const x3, const sz_t k, const uint32 m)
 {
-	for (sz_t h = 0; h < 2; ++h) { x12[k + h * VSIZE * m] = u_P12[h]; x3[k + h * VSIZE * m] = u_P3[h]; }
+	for (sz_t h = 0; h < 2; ++h) { const uint32_2 t = x12[k + h * VSIZE * m]; const uint32_3 r = { t.s0, t.s1, x3[k + h * VSIZE * m] }; u[h] = r; }
 }
 
-inline void frwd41_P123(uint32_2 * const u_P12, uint32 * const u_P3, const uint32_2 w12_1, const uint32 w3_1)
+inline void write2_P123(__global uint32_2 * const x12, __global uint32 * const x3, const uint32_3 * const u, const sz_t k, const uint32 m)
 {
-	const uint32_2 u2w1_P12 = mul_P12(u_P12[2], w12_1); const uint32 u2w1_P3 = mul_P3(u_P3[2], w3_1);
-	u_P12[2] = sub_P12(u_P12[0], u2w1_P12); u_P3[2] = sub_P3(u_P3[0], u2w1_P3);
-	u_P12[0] = add_P12(u_P12[0], u2w1_P12); u_P3[0] = add_P3(u_P3[0], u2w1_P3);
-
-	const uint32_2 u3w1_P12 = mul_P12(u_P12[3], w12_1); const uint32 u3w1_P3 = mul_P3(u_P3[3], w3_1);
-	u_P12[3] = sub_P12(u_P12[1], u3w1_P12); u_P3[3] = sub_P3(u_P3[1], u3w1_P3);
-	u_P12[1] = add_P12(u_P12[1], u3w1_P12); u_P3[1] = add_P3(u_P3[1], u3w1_P3);
+	for (sz_t h = 0; h < 2; ++h) { x12[k + h * VSIZE * m] = (uint32_2)(u[h].r1, u[h].r2); x3[k + h * VSIZE * m] = u[h].r3; }
 }
 
-inline void frwd41_0_P123(uint32_2 * const u_P12, uint32 * const u_P3, const uint32_2 w12_1, const uint32 w3_1)
+inline void frwd41_P123(uint32_3 * const u, const uint32_3 w_1)
 {
-	const uint32_2 u2w1_P12 = mul_P12(u_P12[2], w12_1); const uint32 u2w1_P3 = mul_P3(u_P3[2], w3_1);
-	u_P12[2] = add_P12(u_P12[2], sub_P12(u_P12[0], u2w1_P12)); u_P3[2] = add_P3(u_P3[2], sub_P3(u_P3[0], u2w1_P3));
-	u_P12[0] = add_P12(u_P12[0], u2w1_P12); u_P3[0] = add_P3(u_P3[0], u2w1_P3);
-
-	const uint32_2 u3w1_P12 = mul_P12(u_P12[3], w12_1); const uint32 u3w1_P3 = mul_P3(u_P3[3], w3_1);
-	u_P12[3] = add_P12(u_P12[3], sub_P12(u_P12[1], u3w1_P12)); u_P3[3] = add_P3(u_P3[3], sub_P3(u_P3[1], u3w1_P3));
-	u_P12[1] = add_P12(u_P12[1], u3w1_P12); u_P3[1] = add_P3(u_P3[1], u3w1_P3);
+	const uint32_3 u2w1 = mul_P123(u[2], w_1);
+	u[2] = sub_P123(u[0], u2w1); u[0] = add_P123(u[0], u2w1);
+	const uint32_3 u3w1 = mul_P123(u[3], w_1);
+	u[3] = sub_P123(u[1], u3w1); u[1] = add_P123(u[1], u3w1);
 }
 
-inline void frwd42_P123(uint32_2 * const u_P12, uint32 * const u_P3, const uint32_2 w12_2, const uint32 w3_2, const uint32_2 w12_3, const uint32 w3_3)
+inline void frwd41_0_P123(uint32_3 * const u, const uint32_3 w_1)
 {
-	const uint32_2 u1w2_P12 = mul_P12(u_P12[1], w12_2); const uint32 u1w2_P3 = mul_P3(u_P3[1], w3_2);
-	u_P12[1] = sub_P12(u_P12[0], u1w2_P12); u_P3[1] = sub_P3(u_P3[0], u1w2_P3);
-	u_P12[0] = add_P12(u_P12[0], u1w2_P12); u_P3[0] = add_P3(u_P3[0], u1w2_P3);
-
-	const uint32_2 u3w3_P12 = mul_P12(u_P12[3], w12_3); const uint32 u3w3_P3 = mul_P3(u_P3[3], w3_3);
-	u_P12[3] = sub_P12(u_P12[2], u3w3_P12); u_P3[3] = sub_P3(u_P3[2], u3w3_P3);
-	u_P12[2] = add_P12(u_P12[2], u3w3_P12); u_P3[2] = add_P3(u_P3[2], u3w3_P3);
+	const uint32_3 u2w1 = mul_P123(u[2], w_1);
+	u[2] = add_P123(u[2], sub_P123(u[0], u2w1)); u[0] = add_P123(u[0], u2w1);
+	const uint32_3 u3w1 = mul_P123(u[3], w_1);
+	u[3] = add_P123(u[3], sub_P123(u[1], u3w1)); u[1] = add_P123(u[1], u3w1);
 }
 
-inline void frwd42_0_P123(uint32_2 * const u_P12, uint32 * const u_P3, const uint32_2 w12_2, const uint32 w3_2, const uint32_2 w12_3, const uint32 w3_3)
+inline void frwd42_P123(uint32_3 * const u, const uint32_3 w_2, const uint32_3 w_3)
 {
-	const uint32_2 u0_P12 = toMonty_P12(u_P12[0]); const uint32 u0_P3 = toMonty_P3(u_P3[0]);
-	const uint32_2 u1w2_P12 = mul_P12(u_P12[1], w12_2); const uint32 u1w2_P3 = mul_P3(u_P3[1], w3_2);
-	u_P12[0] = add_P12(u0_P12, u1w2_P12); u_P3[0] = add_P3(u0_P3, u1w2_P3);
-	u_P12[1] = sub_P12(u0_P12, u1w2_P12); u_P3[1] = sub_P3(u0_P3, u1w2_P3);
-
-	const uint32_2 u2_P12 = toMonty_P12(u_P12[2]); const uint32 u2_P3 = toMonty_P3(u_P3[2]);
-	const uint32_2 u3w3_P12 = mul_P12(u_P12[3], w12_3); const uint32 u3w3_P3 = mul_P3(u_P3[3], w3_3);
-	u_P12[2] = add_P12(u2_P12, u3w3_P12); u_P3[2] = add_P3(u2_P3, u3w3_P3);
-	u_P12[3] = sub_P12(u2_P12, u3w3_P12); u_P3[3] = sub_P3(u2_P3, u3w3_P3);
+	const uint32_3 u1w2 = mul_P123(u[1], w_2);
+	u[1] = sub_P123(u[0], u1w2); u[0] = add_P123(u[0], u1w2);
+	const uint32_3 u3w3 = mul_P123(u[3], w_3);
+	u[3] = sub_P123(u[2], u3w3); u[2] = add_P123(u[2], u3w3);
 }
 
-inline void bkwd42_P123(uint32_2 * const u_P12, uint32 * const u_P3, const uint32_2 wi12_2, const uint32 wi3_2, const uint32_2 wi12_3, const uint32 wi3_3)
+inline void frwd42_0_P123(uint32_3 * const u, const uint32_3 w_2, const uint32_3 w_3)
 {
-	const uint32_2 v1_P12 = sub_P12(u_P12[0], u_P12[1]); const uint32 v1_P3 = sub_P3(u_P3[0], u_P3[1]);
-	u_P12[0] = add_P12(u_P12[0], u_P12[1]); u_P3[0] = add_P3(u_P3[0], u_P3[1]);
-	u_P12[1] = mul_P12(v1_P12, wi12_2); u_P3[1] = mul_P3(v1_P3, wi3_2);
-
-	const uint32_2 v3_P12 = sub_P12(u_P12[2], u_P12[3]); const uint32 v3_P3 = sub_P3(u_P3[2], u_P3[3]);
-	u_P12[2] = add_P12(u_P12[2], u_P12[3]); u_P3[2] = add_P3(u_P3[2], u_P3[3]);
-	u_P12[3] = mul_P12(v3_P12, wi12_3); u_P3[3] = mul_P3(v3_P3, wi3_3);
+	const uint32_3 u0 = toMonty_P123(u[0]), u1w2 = mul_P123(u[1], w_2);
+	u[0] = add_P123(u0, u1w2); u[1] = sub_P123(u0, u1w2);
+	const uint32_3 u2 = toMonty_P123(u[2]), u3w3 = mul_P123(u[3], w_3);
+	u[2] = add_P123(u2, u3w3); u[3] = sub_P123(u2, u3w3);
 }
 
-inline void bkwd41_P123(uint32_2 * const u_P12, uint32 * const u_P3, const uint32_2 wi12_1, const uint32 wi3_1)
+inline void bkwd42_P123(uint32_3 * const u, const uint32_3 wi_2, const uint32_3 wi_3)
 {
-	const uint32_2 v2_P12 = sub_P12(u_P12[0], u_P12[2]); const uint32 v2_P3 = sub_P3(u_P3[0], u_P3[2]);
-	u_P12[0] = add_P12(u_P12[0], u_P12[2]); u_P3[0] = add_P3(u_P3[0], u_P3[2]);
-	u_P12[2] = mul_P12(v2_P12, wi12_1); u_P3[2] = mul_P3(v2_P3, wi3_1);
-
-	const uint32_2 v3_P12 = sub_P12(u_P12[1], u_P12[3]); const uint32 v3_P3 = sub_P3(u_P3[1], u_P3[3]);
-	u_P12[1] = add_P12(u_P12[1], u_P12[3]); u_P3[1] = add_P3(u_P3[1], u_P3[3]);
-	u_P12[3] = mul_P12(v3_P12, wi12_1); u_P3[3] = mul_P3(v3_P3, wi3_1);
+	const uint32_3 v1 = sub_P123(u[0], u[1]);
+	u[0] = add_P123(u[0], u[1]); u[1] = mul_P123(v1, wi_2);
+	const uint32_3 v3 = sub_P123(u[2], u[3]);
+	u[2] = add_P123(u[2], u[3]); u[3] = mul_P123(v3, wi_3);
 }
 
-inline void bkwd41_0_P123(uint32_2 * const u_P12, uint32 * const u_P3, const uint32_2 wi12_0, const uint32 wi3_0, const uint32_2 wi12_1, const uint32 wi3_1)
+inline void bkwd41_P123(uint32_3 * const u, const uint32_3 wi_1)
 {
-	const uint32_2 v2_P12 = mul_P12(add_P12(u_P12[0], u_P12[2]), wi12_0); const uint32 v2_P3 = mul_P3(add_P3(u_P3[0], u_P3[2]), wi3_0);
-	u_P12[2] = mul_P12(sub_P12(u_P12[2], u_P12[0]), wi12_1); u_P3[2] = mul_P3(sub_P3(u_P3[2], u_P3[0]), wi3_1);
-	u_P12[0] = mul_P12(sub_P12(u_P12[0], v2_P12), wi12_1); u_P3[0] = mul_P3(sub_P3(u_P3[0], v2_P3), wi3_1);
-
-	const uint32_2 v3_P12 = mul_P12(add_P12(u_P12[1], u_P12[3]), wi12_0); const uint32 v3_P3 = mul_P3(add_P3(u_P3[1], u_P3[3]), wi3_0);
-	u_P12[3] = mul_P12(sub_P12(u_P12[3], u_P12[1]), wi12_1); u_P3[3] = mul_P3(sub_P3(u_P3[3], u_P3[1]), wi3_1);
-	u_P12[1] = mul_P12(sub_P12(u_P12[1], v3_P12), wi12_1); u_P3[1] = mul_P3(sub_P3(u_P3[1], v3_P3), wi3_1);
+	const uint32_3 v2 = sub_P123(u[0], u[2]);
+	u[0] = add_P123(u[0], u[2]); u[2] = mul_P123(v2, wi_1);
+	const uint32_3 v3 = sub_P123(u[1], u[3]);
+	u[1] = add_P123(u[1], u[3]); u[3] = mul_P123(v3, wi_1);
 }
 
-inline void sqr42_P123(uint32_2 * const u_P12, uint32 * const u_P3, const uint32_2 w12_2, const uint32 w3_2, const uint32_2 w12_3, const uint32 w3_3)
+inline void bkwd41_0_P123(uint32_3 * const u, const uint32_3 wi_0, const uint32_3 wi_1)
 {
-	const uint32_2 u1w2_P12 = mul_P12(u_P12[1], w12_2);	const uint32 u1w2_P3 = mul_P3(u_P3[1], w3_2);
-	u_P12[1] = mul_P12(add_P12(u_P12[0], u_P12[0]), u_P12[1]); u_P3[1] = mul_P3(add_P3(u_P3[0], u_P3[0]), u_P3[1]);
-	u_P12[0] = add_P12(mul_P12(u_P12[0], u_P12[0]), mul_P12(u1w2_P12, u1w2_P12)); u_P3[0] = add_P3(mul_P3(u_P3[0], u_P3[0]), mul_P3(u1w2_P3, u1w2_P3));
-
-	const uint32_2 u3w3_P12 = mul_P12(u_P12[3], w12_3); const uint32 u3w3_P3 = mul_P3(u_P3[3], w3_3);
-	u_P12[3] = mul_P12(add_P12(u_P12[2], u_P12[2]), u_P12[3]); u_P3[3] = mul_P3(add_P3(u_P3[2], u_P3[2]), u_P3[3]);
-	u_P12[2] = add_P12(mul_P12(u_P12[2], u_P12[2]), mul_P12(u3w3_P12, u3w3_P12)); u_P3[2] = add_P3(mul_P3(u_P3[2], u_P3[2]), mul_P3(u3w3_P3, u3w3_P3));
+	const uint32_3 v2 = mul_P123(add_P123(u[0], u[2]), wi_0);
+	u[2] = mul_P123(sub_P123(u[2], u[0]), wi_1); u[0] = mul_P123(sub_P123(u[0], v2), wi_1);
+	const uint32_3 v3 = mul_P123(add_P123(u[1], u[3]), wi_0);
+	u[3] = mul_P123(sub_P123(u[3], u[1]), wi_1); u[1] = mul_P123(sub_P123(u[1], v3), wi_1);
 }
 
-inline void read4_P123(uint32_2 * const u_P12, uint32 * const u_P3, const __global uint32_2 * const x12, const __global uint32 * const x3, const sz_t k, const uint32 m)
+inline void sqr42_P123(uint32_3 * const u, const uint32_3 w_2, const uint32_3 w_3)
 {
-	for (sz_t h = 0; h < 4; ++h) { u_P12[h] = x12[k + h * VSIZE * m]; u_P3[h] = x3[k + h * VSIZE * m]; }
+	const uint32_3 u1w2 = mul_P123(u[1], w_2);
+	u[1] = mul_P123(add_P123(u[0], u[0]), u[1]); u[0] = add_P123(mul_P123(u[0], u[0]), mul_P123(u1w2, u1w2));
+	const uint32_3 u3w3 = mul_P123(u[3], w_3);
+	u[3] = mul_P123(add_P123(u[2], u[2]), u[3]); u[2] = add_P123(mul_P123(u[2], u[2]), mul_P123(u3w3, u3w3));
 }
 
-inline void write4_P123(__global uint32_2 * const x12, __global uint32 * const x3, const uint32_2 * const u_P12, const uint32 * const u_P3, const sz_t k, const uint32 m)
+inline void read4_P123(uint32_3 * const u, const __global uint32_2 * const x12, const __global uint32 * const x3, const sz_t k, const uint32 m)
 {
-	for (sz_t h = 0; h < 4; ++h) { x12[k + h * VSIZE * m] = u_P12[h]; x3[k + h * VSIZE * m] = u_P3[h]; }
+	for (sz_t h = 0; h < 4; ++h) { const uint32_2 t = x12[k + h * VSIZE * m]; const uint32_3 r = { t.s0, t.s1, x3[k + h * VSIZE * m] }; u[h] = r; }
 }
 
-inline void read22l_P123(uint32_2 * const u_P12, uint32 * const u_P3, const __local uint32_2 * const X12, const __local uint32 * const X3, const sz_t k, const uint32 m)
+inline void write4_P123(__global uint32_2 * const x12, __global uint32 * const x3, const uint32_3 * const u, const sz_t k, const uint32 m)
 {
-	for (sz_t h = 0; h < 2; ++h) { u_P12[h + 0] = X12[k + 0 + h * VSIZE * m]; u_P3[h + 0] = X3[k + 0 + h * VSIZE * m]; }
-	for (sz_t h = 0; h < 2; ++h) { u_P12[h + 2] = X12[k + 1 + h * VSIZE * m]; u_P3[h + 2] = X3[k + 1 + h * VSIZE * m]; }
+	for (sz_t h = 0; h < 4; ++h) { x12[k + h * VSIZE * m] = (uint32_2)(u[h].r1, u[h].r2); x3[k + h * VSIZE * m] = u[h].r3; }
 }
 
-inline void write22l_P123(__local uint32_2 * const X12, __local uint32 * const X3, const uint32_2 * const u_P12, const uint32 * const u_P3, const sz_t k, const uint32 m)
+inline void read22l_P123(uint32_3 * const u, const __local uint32_2 * const X12, const __local uint32 * const X3, const sz_t k, const uint32 m)
 {
-	for (sz_t h = 0; h < 2; ++h) { X12[k + 0 + h * VSIZE * m] = u_P12[h + 0]; X3[k + 0 + h * VSIZE * m] = u_P3[h + 0]; }
-	for (sz_t h = 0; h < 2; ++h) { X12[k + 1 + h * VSIZE * m] = u_P12[h + 2]; X3[k + 1 + h * VSIZE * m] = u_P3[h + 2]; }
+	for (sz_t h = 0; h < 2; ++h) { const uint32_2 t = X12[k + 0 + h * VSIZE * m]; const uint32_3 r = { t.s0, t.s1, X3[k + 0 + h * VSIZE * m] }; u[h + 0] = r; }
+	for (sz_t h = 0; h < 2; ++h) { const uint32_2 t = X12[k + 1 + h * VSIZE * m]; const uint32_3 r = { t.s0, t.s1, X3[k + 1 + h * VSIZE * m] }; u[h + 2] = r; }
 }
 
-inline void read4l_P123(uint32_2 * const u_P12, uint32 * const u_P3, const __local uint32_2 * const X12, const __local uint32 * const X3, const sz_t k, const uint32 m)
+inline void write22l_P123(__local uint32_2 * const X12, __local uint32 * const X3, const uint32_3 * const u, const sz_t k, const uint32 m)
 {
-	for (sz_t h = 0; h < 4; ++h) { u_P12[h] = X12[k + h * VSIZE * m]; u_P3[h] = X3[k + h * VSIZE * m]; }
+	for (sz_t h = 0; h < 2; ++h) { X12[k + 0 + h * VSIZE * m] = (uint32_2)(u[h + 0].r1, u[h + 0].r2); X3[k + 0 + h * VSIZE * m] = u[h + 0].r3; }
+	for (sz_t h = 0; h < 2; ++h) { X12[k + 1 + h * VSIZE * m] = (uint32_2)(u[h + 2].r1, u[h + 2].r2); X3[k + 1 + h * VSIZE * m] = u[h + 2].r3; }
 }
 
-inline void write4l_P123(__local uint32_2 * const X12, __local uint32 * const X3, const uint32_2 * const u_P12, const uint32 * const u_P3, const sz_t k, const uint32 m)
+inline void read4l_P123(uint32_3 * const u, const __local uint32_2 * const X12, const __local uint32 * const X3, const sz_t k, const uint32 m)
 {
-	for (sz_t h = 0; h < 4; ++h) { X12[k + h * VSIZE * m] = u_P12[h]; X3[k + h * VSIZE * m] = u_P3[h]; }
+	for (sz_t h = 0; h < 4; ++h) { const uint32_2 t = X12[k + h * VSIZE * m]; const uint32_3 r = { t.s0, t.s1, X3[k + h * VSIZE * m] }; u[h] = r; }
+}
+
+inline void write4l_P123(__local uint32_2 * const X12, __local uint32 * const X3, const uint32_3 * const u, const sz_t k, const uint32 m)
+{
+	for (sz_t h = 0; h < 4; ++h) { X12[k + h * VSIZE * m] = (uint32_2)(u[h].r1, u[h].r2); X3[k + h * VSIZE * m] = u[h].r3; }
 }
 
 inline void frwd4_P123(const __global uint32_2 * restrict const wr12, const __global uint32 * restrict const wr3,
 	const __global uint32_2 * restrict const x12, const __global uint32 * restrict const x3,
 	__local uint32_2 * const X12, __local uint32 * const X3, const sz_t kg, const sz_t k, const sz_t m, const sz_t sj)
 {
-	uint32_2 u_P12[4]; uint32 u_P3[4];
-	read4_P123(u_P12, u_P3, x12, x3, kg + k, m);
-	frwd41_P123(u_P12, u_P3, wr12[sj], wr3[sj]);
-	frwd42_P123(u_P12, u_P3, wr12[2 * sj], wr3[2 * sj], wr12[2 * sj + 1], wr3[2 * sj + 1]);
-	write4l_P123(X12, X3, u_P12, u_P3, k, m);
+	uint32_3 u[4]; read4_P123(u, x12, x3, kg + k, m);
+	frwd41_P123(u, read_P123(wr12, wr3, sj));
+	frwd42_P123(u, read_P123(wr12, wr3, 2 * sj), read_P123(wr12, wr3, 2 * sj + 1));
+	write4l_P123(X12, X3, u, k, m);
 }
 
 inline void bkwd4_P123(const __global uint32_2 * restrict const wri12, const __global uint32 * restrict const wri3,
 	const __local uint32_2 * const X12, const __local uint32 * const X3,
 	__global uint32_2 * restrict const x12, __global uint32 * restrict const x3, const sz_t kg, const sz_t k, const sz_t m, const sz_t sj)
 {
-	uint32_2 u_P12[4]; uint32 u_P3[4];
-	read4l_P123(u_P12, u_P3, X12, X3, k, m);
-	bkwd42_P123(u_P12, u_P3, wri12[2 * sj], wri3[2 * sj], wri12[2 * sj + 1], wri3[2 * sj + 1]);
-	bkwd41_P123(u_P12, u_P3, wri12[sj], wri3[sj]);
-	write4_P123(x12, x3, u_P12, u_P3, kg + k, m);
+	uint32_3 u[4]; read4l_P123(u, X12, X3, k, m);
+	bkwd42_P123(u, read_P123(wri12, wri3, 2 * sj), read_P123(wri12, wri3, 2 * sj + 1));
+	bkwd41_P123(u, read_P123(wri12, wri3, sj));
+	write4_P123(x12, x3, u, kg + k, m);
 }
 
 inline void sqr4l_P123(const __global uint32_2 * restrict const wr12, const __global uint32 * restrict const wr3,
 	const __global uint32_2 * restrict const wri12, const __global uint32 * restrict const wri3,
 	__local uint32_2 * const X12, __local uint32 * const X3, const sz_t k, const sz_t sj)
 {
-	uint32_2 u_P12[4]; uint32 u_P3[4];
-	read4l_P123(u_P12, u_P3, X12, X3, k, 1);
-	frwd41_P123(u_P12, u_P3, wr12[sj], wr3[sj]);
-	sqr42_P123(u_P12, u_P3, wr12[2 * sj], wr3[2 * sj], wr12[2 * sj + 1], wr3[2 * sj + 1]);
-	bkwd41_P123(u_P12, u_P3, wri12[sj], wri3[sj]);
-	write4l_P123(X12, X3, u_P12, u_P3, k, 1);
+	uint32_3 u[4]; read4l_P123(u, X12, X3, k, 1);
+	frwd41_P123(u, read_P123(wr12, wr3, sj));
+	sqr42_P123(u, read_P123(wr12, wr3, 2 * sj), read_P123(wr12, wr3, 2 * sj + 1));
+	bkwd41_P123(u, read_P123(wri12, wri3, sj));
+	write4l_P123(X12, X3, u, k, 1);
 }
 
 inline void sqr22l_P123(const __global uint32_2 * restrict const wr12, const __global uint32 * restrict const wr3,
 	__local uint32_2 * const X12, __local uint32 * const X3, const sz_t k, const sz_t sj)
 {
-	uint32_2 u_P12[4]; uint32 u_P3[4];
-	read22l_P123(u_P12, u_P3, X12, X3, k, 1);
-	const uint32_2 w12 = wr12[sj]; const uint32 w3 = wr3[sj];
-	sqr2_P123(&u_P12[0], &u_P3[0], w12, w3);
-	sqr2_P123(&u_P12[2], &u_P3[2], w12, w3);
-	write22l_P123(X12, X3, u_P12, u_P3, k, 1);
+	uint32_3 u[4]; read22l_P123(u, X12, X3, k, 1);
+	const uint32_3 w = read_P123(wr12, wr3, sj);
+	sqr2_P123(&u[0], w); sqr2_P123(&u[2], w);
+	write22l_P123(X12, X3, u, k, 1);
 }
 
 inline uint32 barrett(const uint64 a, const uint32 b, const uint32 b_inv, const int b_s, uint32 * a_p)
@@ -440,10 +420,9 @@ void square2(const __global uint32_2 * restrict const wr12, const __global uint3
 	// get_global_size(0) is VSIZE * NSIZE / 2
 	const sz_t sj = NSIZE / 2 + vid, k = VSIZE * 2 * vid + l;
 
-	uint32_2 u_P12[2]; uint32 u_P3[2];
-	read2_P123(u_P12, u_P3, x12, x3, k, 1);
-	sqr2_P123(u_P12, u_P3, wr12[sj], wr3[sj]);
-	write2_P123(x12, x3, u_P12, u_P3, k, 1);
+	uint32_3 u[2]; read2_P123(u, x12, x3, k, 1);
+	sqr2_P123(u, read_P123(wr12, wr3, sj));
+	write2_P123(x12, x3, u, k, 1);
 }
 
 __kernel
@@ -456,14 +435,11 @@ void square4(const __global uint32_2 * restrict const wr12, const __global uint3
 	// get_global_size(0) is VSIZE * NSIZE / 4
 	const sz_t sj = NSIZE / 4 + vid, k = VSIZE * 4 * vid + l;
 
-	uint32_2 u_P12[4]; uint32 u_P3[4];
-	read4_P123(u_P12, u_P3, x12, x3, k, 1);
-
-	frwd41_P123(u_P12, u_P3, wr12[sj], wr3[sj]);
-	sqr42_P123(u_P12, u_P3, wr12[2 * sj], wr3[2 * sj], wr12[2 * sj + 1], wr3[2 * sj + 1]);
-	bkwd41_P123(u_P12, u_P3, wri12[sj], wri3[sj]);
-
-	write4_P123(x12, x3, u_P12, u_P3, k, 1);
+	uint32_3 u[4]; read4_P123(u, x12, x3, k, 1);
+	frwd41_P123(u, read_P123(wr12, wr3, sj));
+	sqr42_P123(u, read_P123(wr12, wr3, 2 * sj), read_P123(wr12, wr3, 2 * sj + 1));
+	bkwd41_P123(u, read_P123(wri12, wri3, sj));
+	write4_P123(x12, x3, u, k, 1);
 }
 
 __kernel __attribute__((work_group_size_hint(8 / 4 * VSIZE, 1, 1)))
@@ -520,24 +496,17 @@ void mul2(const __global uint32_2 * restrict const wr12, const __global uint32 *
 	// get_global_size(0) is VSIZE * NSIZE / 2
 	const sz_t sj = NSIZE / 2 + vid, k = VSIZE * 2 * vid + l;
 
-	const uint32_2 wr12_1 = wr12[sj];
-	const uint32 wr3_1 = wr3[sj];
+	const uint32_3 wr_1 = read_P123(wr12, wr3, sj);
 
-	uint32_2 u_P12[2]; uint32 u_P3[2];
-	read2_P123(u_P12, u_P3, x12, x3, k, 1);
+	uint32_3 u[2]; read2_P123(u, x12, x3, k, 1);
+	frwd2_P123(u, wr_1);
+	uint32_3 v[2]; read2_P123(v, x12, x3, VSIZE * NSIZE + k, 1);
+	frwd2_P123(v, wr_1);
 
-	frwd2_P123(u_P12, u_P3, wr12_1, wr3_1);
+	for (sz_t h = 0; h < 2; ++h) u[h] = half_P123(mul_P123(u[h], v[h]));
 
-	uint32_2 v_P12[2]; uint32 v_P3[2];
-	read2_P123(v_P12, v_P3, x12, x3, VSIZE * NSIZE + k, 1);
-
-	frwd2_P123(v_P12, v_P3, wr12_1, wr3_1);
-
-	for (sz_t h = 0; h < 2; ++h) { u_P12[h] = half_P12(mul_P12(u_P12[h], v_P12[h])); u_P3[h] = half_P3(mul_P3(u_P3[h], v_P3[h])); }
-
-	bkwd2_P123(u_P12, u_P3, wri12[sj], wri3[sj]);
-
-	write2_P123(x12, x3, u_P12, u_P3, k, 1);
+	bkwd2_P123(u, read_P123(wri12, wri3, sj));
+	write2_P123(x12, x3, u, k, 1);
 }
 
 __kernel
@@ -550,28 +519,20 @@ void mul4(const __global uint32_2 * restrict const wr12, const __global uint32 *
 	// get_global_size(0) is VSIZE * NSIZE / 4
 	const sz_t sj = NSIZE / 4 + vid, k = VSIZE * 4 * vid + l;
 
-	const uint32_2 wr12_1 = wr12[sj], wr12_2 = wr12[2 * sj], wr12_3 = wr12[2 * sj + 1];
-	const uint32 wr3_1 = wr3[sj], wr3_2 = wr3[2 * sj], wr3_3 = wr3[2 * sj + 1];
+	const uint32_3 wr_1 = read_P123(wr12, wr3, sj), wr_2 = read_P123(wr12, wr3, 2 * sj), wr_3 = read_P123(wr12, wr3, 2 * sj + 1);
 
-	uint32_2 u_P12[4]; uint32 u_P3[4];
-	read4_P123(u_P12, u_P3, x12, x3, k, 1);
+	uint32_3 u[4]; read4_P123(u, x12, x3, k, 1);
+	frwd41_P123(u, wr_1);
+	frwd42_P123(u, wr_2, wr_3);
+	uint32_3 v[4]; read4_P123(v, x12, x3, VSIZE * NSIZE + k, 1);
+	frwd41_P123(v, wr_1);
+	frwd42_P123(v, wr_2, wr_3);
 
-	frwd41_P123(u_P12, u_P3, wr12_1, wr3_1);
-	frwd42_P123(u_P12, u_P3, wr12_2, wr3_2, wr12_3, wr3_3);
+	for (sz_t h = 0; h < 4; ++h) u[h] = half_P123(mul_P123(u[h], v[h]));
 
-	uint32_2 v_P12[4]; uint32 v_P3[4];
-	read4_P123(v_P12, v_P3, x12, x3, VSIZE * NSIZE + k, 1);
-
-	frwd41_P123(v_P12, v_P3, wr12_1, wr3_1);
-	frwd42_P123(v_P12, v_P3, wr12_2, wr3_2, wr12_3, wr3_3);
-
-	for (sz_t h = 0; h < 4; ++h) u_P12[h] = half_P12(mul_P12(u_P12[h], v_P12[h]));
-	for (sz_t h = 0; h < 4; ++h) u_P3[h] = half_P3(mul_P3(u_P3[h], v_P3[h]));
-
-	bkwd42_P123(u_P12, u_P3, wri12[2 * sj], wri3[2 * sj], wri12[2 * sj + 1], wri3[2 * sj + 1]);
-	bkwd41_P123(u_P12, u_P3, wri12[sj], wri3[sj]);
-
-	write4_P123(x12, x3, u_P12, u_P3, k, 1);
+	bkwd42_P123(u, read_P123(wri12, wri3, 2 * sj), read_P123(wri12, wri3, 2 * sj + 1));
+	bkwd41_P123(u, read_P123(wri12, wri3, sj));
+	write4_P123(x12, x3, u, k, 1);
 }
 
 __kernel
@@ -583,13 +544,10 @@ void forward4(const __global uint32_2 * restrict const wr12, const __global uint
 
 	const sz_t sj = s + (vid >> lm), i = vid & (m - 1), mj = vid - i, k = (reg * NSIZE + (4 * mj + i)) * VSIZE + l;
 
-	uint32_2 u_P12[4]; uint32 u_P3[4];
-	read4_P123(u_P12, u_P3, x12, x3, k, m);
-
-	frwd41_P123(u_P12, u_P3, wr12[sj], wr3[sj]);
-	frwd42_P123(u_P12, u_P3, wr12[2 * sj], wr3[2 * sj], wr12[2 * sj + 1], wr3[2 * sj + 1]);
-
-	write4_P123(x12, x3, u_P12, u_P3, k, m);
+	uint32_3 u[4]; read4_P123(u, x12, x3, k, m);
+	frwd41_P123(u, read_P123(wr12, wr3, sj));
+	frwd42_P123(u, read_P123(wr12, wr3, 2 * sj), read_P123(wr12, wr3, 2 * sj + 1));
+	write4_P123(x12, x3, u, k, m);
 }
 
 __kernel __attribute__((work_group_size_hint(16 / 4 * VSIZE, 1, 1)))
@@ -607,19 +565,17 @@ void forward16(const __global uint32_2 * restrict const wr12, const __global uin
 	const sz_t k0 = (reg * NSIZE + (vid_blk + idl)) * VSIZE + l, miv = iv << lm;
 	const sz_t sj4 = s * 4 + (vid_blk >> (lm + 2)) + i, sj = sj4 / 4;
 
-	uint32_2 u_P12[4]; uint32 u_P3[4];
-	read4_P123(u_P12, u_P3, x12, x3, k0 + miv, 4 * m);
-	frwd41_P123(u_P12, u_P3, wr12[sj], wr3[sj]);
-	frwd42_P123(u_P12, u_P3, wr12[2 * sj], wr3[2 * sj], wr12[2 * sj + 1], wr3[2 * sj + 1]);
-	write4l_P123(X12, X3, u_P12, u_P3, iv + l, 4);
+	uint32_3 u[4]; read4_P123(u, x12, x3, k0 + miv, 4 * m);
+	frwd41_P123(u, read_P123(wr12, wr3, sj));
+	frwd42_P123(u, read_P123(wr12, wr3, 2 * sj), read_P123(wr12, wr3, 2 * sj + 1));
+	write4l_P123(X12, X3, u, iv + l, 4);
 
 	barrier(CLK_LOCAL_MEM_FENCE);
 
-	uint32_2 v_P12[4]; uint32 v_P3[4];
-	read4l_P123(v_P12, v_P3, X12, X3, 4 * iv + l, 1);
-	frwd41_P123(v_P12, v_P3, wr12[sj4], wr3[sj4]); 
-	frwd42_P123(v_P12, v_P3, wr12[2 * sj4], wr3[2 * sj4], wr12[2 * sj4 + 1], wr3[2 * sj4 + 1]);
-	write4_P123(x12, x3, v_P12, v_P3, k0 + 4 * miv, m);
+	uint32_3 v[4]; read4l_P123(v, X12, X3, 4 * iv + l, 1);
+	frwd41_P123(v, read_P123(wr12, wr3, sj4)); 
+	frwd42_P123(v, read_P123(wr12, wr3, 2 * sj4), read_P123(wr12, wr3, 2 * sj4 + 1));
+	write4_P123(x12, x3, v, k0 + 4 * miv, m);
 }
 
 __kernel __attribute__((work_group_size_hint(16 / 4 * VSIZE, 1, 1)))
@@ -639,19 +595,17 @@ void forward16_0(const __global uint32_2 * restrict const wr12, const __global u
 	const sz_t k0 = (reg * NSIZE + (vid_blk + idl)) * VSIZE + l, miv = iv << lm;
 	const sz_t sj4 = 4 + (vid_blk >> (lm + 2)) + i;
 
-	uint32_2 u_P12[4]; uint32 u_P3[4];
-	read4_P123(u_P12, u_P3, x12, x3, k0 + miv, 4 * m);
-	frwd41_0_P123(u_P12, u_P3, wr12[1], wr3[1]);
-	frwd42_0_P123(u_P12, u_P3, wr12[2], wr3[2], wr12[3], wr3[3]);
-	write4l_P123(X12, X3, u_P12, u_P3, iv + l, 4);
+	uint32_3 u[4]; read4_P123(u, x12, x3, k0 + miv, 4 * m);
+	frwd41_0_P123(u, read_P123(wr12, wr3, 1));
+	frwd42_0_P123(u, read_P123(wr12, wr3, 2), read_P123(wr12, wr3, 3));
+	write4l_P123(X12, X3, u, iv + l, 4);
 
 	barrier(CLK_LOCAL_MEM_FENCE);
 
-	uint32_2 v_P12[4]; uint32 v_P3[4];
-	read4l_P123(v_P12, v_P3, X12, X3, 4 * iv + l, 1);
-	frwd41_P123(v_P12, v_P3, wr12[sj4], wr3[sj4]);
-	frwd42_P123(v_P12, v_P3, wr12[2 * sj4], wr3[2 * sj4], wr12[2 * sj4 + 1], wr3[2 * sj4 + 1]);
-	write4_P123(x12, x3, v_P12, v_P3, k0 + 4 * miv, m);
+	uint32_3 v[4]; read4l_P123(v, X12, X3, 4 * iv + l, 1);
+	frwd41_P123(v, read_P123(wr12, wr3, sj4));
+	frwd42_P123(v, read_P123(wr12, wr3, 2 * sj4), read_P123(wr12, wr3, 2 * sj4 + 1));
+	write4_P123(x12, x3, v, k0 + 4 * miv, m);
 }
 
 __kernel
@@ -663,13 +617,10 @@ void backward4(const __global uint32_2 * restrict const wri12, const __global ui
 
 	const sz_t sj = s + (vid >> lm), i = vid & (m - 1), mj = vid - i, k = VSIZE * (4 * mj + i) + l;
 
-	uint32_2 u_P12[4]; uint32 u_P3[4];
-	read4_P123(u_P12, u_P3, x12, x3, k, m);
-
-	bkwd42_P123(u_P12, u_P3, wri12[2 * sj], wri3[2 * sj], wri12[2 * sj + 1], wri3[2 * sj + 1]);
-	bkwd41_P123(u_P12, u_P3, wri12[sj], wri3[sj]);
-
-	write4_P123(x12, x3, u_P12, u_P3, k, m);
+	uint32_3 u[4]; read4_P123(u, x12, x3, k, m);
+	bkwd42_P123(u, read_P123(wri12, wri3, 2 * sj), read_P123(wri12, wri3, 2 * sj + 1));
+	bkwd41_P123(u, read_P123(wri12, wri3, sj));
+	write4_P123(x12, x3, u, k, m);
 }
 
 __kernel __attribute__((work_group_size_hint(16 / 4 * VSIZE, 1, 1)))
@@ -687,19 +638,17 @@ void backward16(const __global uint32_2 * restrict const wri12, const __global u
 	const sz_t k0 = VSIZE * (vid_blk + idl) + l, miv = iv << lm;
 	const sz_t sj4 = s * 4 + (vid_blk >> (lm + 2)) + i, sj = sj4 / 4;
 
-	uint32_2 v_P12[4]; uint32 v_P3[4];
-	read4_P123(v_P12, v_P3, x12, x3, k0 + 4 * miv, m);
-	bkwd42_P123(v_P12, v_P3, wri12[2 * sj4], wri3[2 * sj4], wri12[2 * sj4 + 1], wri3[2 * sj4 + 1]);
-	bkwd41_P123(v_P12, v_P3, wri12[sj4], wri3[sj4]);
-	write4l_P123(X12, X3, v_P12, v_P3, 4 * iv + l, 1);
+	uint32_3 v[4]; read4_P123(v, x12, x3, k0 + 4 * miv, m);
+	bkwd42_P123(v, read_P123(wri12, wri3, 2 * sj4), read_P123(wri12, wri3, 2 * sj4 + 1));
+	bkwd41_P123(v, read_P123(wri12, wri3, sj4));
+	write4l_P123(X12, X3, v, 4 * iv + l, 1);
 
 	barrier(CLK_LOCAL_MEM_FENCE);
 
-	uint32_2 u_P12[4]; uint32 u_P3[4];
-	read4l_P123(u_P12, u_P3, X12, X3, iv + l, 4);
-	bkwd42_P123(u_P12, u_P3, wri12[2 * sj], wri3[2 * sj], wri12[2 * sj + 1], wri3[2 * sj + 1]);
-	bkwd41_P123(u_P12, u_P3, wri12[sj], wri3[sj]);
-	write4_P123(x12, x3, u_P12, u_P3, k0 + miv, 4 * m);
+	uint32_3 u[4]; read4l_P123(u, X12, X3, iv + l, 4);
+	bkwd42_P123(u, read_P123(wri12, wri3, 2 * sj), read_P123(wri12, wri3, 2 * sj + 1));
+	bkwd41_P123(u, read_P123(wri12, wri3, sj));
+	write4_P123(x12, x3, u, k0 + miv, 4 * m);
 }
 
 __kernel __attribute__((work_group_size_hint(16 / 4 * VSIZE, 1, 1)))
@@ -719,19 +668,17 @@ void backward16_0(const __global uint32_2 * restrict const wri12, const __global
 	const sz_t k0 = VSIZE * (vid_blk + idl) + l, miv = iv << lm;
 	const sz_t sj4 = 4 + (vid_blk >> (lm + 2)) + i;
 
-	uint32_2 v_P12[4]; uint32 v_P3[4];
-	read4_P123(v_P12, v_P3, x12, x3, k0 + 4 * miv, m);
-	bkwd42_P123(v_P12, v_P3, wri12[2 * sj4], wri3[2 * sj4], wri12[2 * sj4 + 1], wri3[2 * sj4 + 1]);
-	bkwd41_P123(v_P12, v_P3, wri12[sj4], wri3[sj4]);
-	write4l_P123(X12, X3, v_P12, v_P3, 4 * iv + l, 1);
+	uint32_3 v[4]; read4_P123(v, x12, x3, k0 + 4 * miv, m);
+	bkwd42_P123(v, read_P123(wri12, wri3, 2 * sj4), read_P123(wri12, wri3, 2 * sj4 + 1));
+	bkwd41_P123(v, read_P123(wri12, wri3, sj4));
+	write4l_P123(X12, X3, v, 4 * iv + l, 1);
 
 	barrier(CLK_LOCAL_MEM_FENCE);
 
-	uint32_2 u_P12[4]; uint32 u_P3[4];
-	read4l_P123(u_P12, u_P3, X12, X3, iv + l, 4);
-	bkwd42_P123(u_P12, u_P3, wri12[2], wri3[2], wri12[3], wri3[3]);
-	bkwd41_0_P123(u_P12, u_P3, wri12[0], wri3[0], wri12[1], wri3[1]);
-	write4_P123(x12, x3, u_P12, u_P3, k0 + miv, 4 * m);
+	uint32_3 u[4]; read4l_P123(u, X12, X3, iv + l, 4);
+	bkwd42_P123(u, read_P123(wri12, wri3, 2), read_P123(wri12, wri3, 3));
+	bkwd41_0_P123(u, read_P123(wri12, wri3, 0), read_P123(wri12, wri3, 1));
+	write4_P123(x12, x3, u, k0 + miv, 4 * m);
 }
 
 __kernel
