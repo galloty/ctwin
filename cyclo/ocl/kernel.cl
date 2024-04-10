@@ -301,13 +301,13 @@ inline void write4l(__local uint32_2 * const X12, __local uint32 * const X3, con
 	for (sz_t h = 0; h < 4; ++h) { X12[k + h * VSIZE * m] = (uint32_2)(u[h].r1, u[h].r2); X3[k + h * VSIZE * m] = u[h].r3; }
 }
 
-inline void frwd412(uint32_3 * const u, const __global uint32_2 * restrict const wr12, const __global uint32 * restrict const wr3, const sz_t sj)
+inline void frwd4(uint32_3 * const u, const __global uint32_2 * restrict const wr12, const __global uint32 * restrict const wr3, const sz_t sj)
 {
 	frwd41(u, read1(wr12, wr3, sj));
 	frwd42(u, read1(wr12, wr3, 2 * sj), read1(wr12, wr3, 2 * sj + 1));
 }
 
-inline void bkwd421(uint32_3 * const u, const __global uint32_2 * restrict const wri12, const __global uint32 * restrict const wri3, const sz_t sj)
+inline void bkwd4(uint32_3 * const u, const __global uint32_2 * restrict const wri12, const __global uint32 * restrict const wri3, const sz_t sj)
 {
 	bkwd42(u, read1(wri12, wri3, 2 * sj), read1(wri12, wri3, 2 * sj + 1));
 	bkwd41(u, read1(wri12, wri3, sj));
@@ -391,6 +391,20 @@ inline void read8(uint32_3 * const u, const __global uint32_2 * const x12, const
 inline void write8(__global uint32_2 * const x12, __global uint32 * const x3, const uint32_3 * const u, const sz_t k, const uint32 m)
 {
 	for (sz_t h = 0; h < 8; ++h) { x12[k + h * VSIZE * m] = (uint32_2)(u[h].r1, u[h].r2); x3[k + h * VSIZE * m] = u[h].r3; }
+}
+
+inline void frwd8(uint32_3 * const u, const __global uint32_2 * restrict const wr12, const __global uint32 * restrict const wr3, const sz_t sj)
+{
+	frwd81(u, read1(wr12, wr3, sj));
+	frwd82(u, read1(wr12, wr3, 2 * sj), read1(wr12, wr3, 2 * sj + 1));
+	frwd83(u, read1(wr12, wr3, 4 * sj), read1(wr12, wr3, 4 * sj + 1), read1(wr12, wr3, 4 * sj + 2), read1(wr12, wr3, 4 * sj + 3));
+}
+
+inline void bkwd8(uint32_3 * const u, const __global uint32_2 * restrict const wri12, const __global uint32 * restrict const wri3, const sz_t sj)
+{
+	bkwd83(u, read1(wri12, wri3, 4 * sj), read1(wri12, wri3, 4 * sj + 1), read1(wri12, wri3, 4 * sj + 2), read1(wri12, wri3, 4 * sj + 3));
+	bkwd82(u, read1(wri12, wri3, 2 * sj), read1(wri12, wri3, 2 * sj + 1));
+	bkwd81(u, read1(wri12, wri3, sj));
 }
 
 //////////////////////////////////////////////////////////////////
@@ -506,7 +520,7 @@ void square4(const __global uint32_2 * restrict const wr12, const __global uint3
 	write4(x12, x3, u, k, 1);
 }
 
-__kernel __attribute__((work_group_size_hint(8 / 4 * VSIZE, 1, 1)))
+__kernel __attribute__((reqd_work_group_size(8 / 4 * VSIZE, 1, 1)))
 void square8(const __global uint32_2 * restrict const wr12, const __global uint32 * restrict const wr3,
 	const __global uint32_2 * restrict const wri12, const __global uint32 * restrict const wri3,
 	__global uint32_2 * restrict const x12, __global uint32 * restrict const x3)
@@ -514,15 +528,18 @@ void square8(const __global uint32_2 * restrict const wr12, const __global uint3
 	__local uint32_2 X12[8 * VSIZE];
 	__local uint32 X3[8 * VSIZE];
 
+	const sz_t local_id = (sz_t)get_local_id(0), group_id = (sz_t)get_group_id(0);
+
 	// get_global_size(0) is VSIZE * NSIZE / 4
-	const sz_t sj2 = NSIZE / 2 + (sz_t)get_global_id(0) * 2 / VSIZE;
-	const sz_t k_group = (sz_t)get_group_id(0) * 8 * VSIZE, i = (sz_t)get_local_id(0);
+	// const sz_t global_id = 8 / 4 * VSIZE * group_id + local_id, sj2 = NSIZE / 2 + global_id * 2 / VSIZE;
+	const sz_t sj2 = NSIZE / 2 + 8 / 4 * 2 * group_id + local_id * 2 / VSIZE;
+	const sz_t k_group = group_id * 8 * VSIZE, i = local_id;
 
 	const sz_t sj8 = sj2 / 4, k8 = i;
 	const sz_t k2 = 2 * ((2 * i) & (sz_t)~(VSIZE - 1)) + ((2 * i) % VSIZE);
 
 	uint32_3 uf[4]; read4(uf, x12, x3, k_group + k8, 2);
-	frwd412(uf, wr12, wr3, sj8);
+	frwd4(uf, wr12, wr3, sj8);
 	write4l(X12, X3, uf, k8, 2);
 
 	barrier(CLK_LOCAL_MEM_FENCE);
@@ -535,11 +552,11 @@ void square8(const __global uint32_2 * restrict const wr12, const __global uint3
 	barrier(CLK_LOCAL_MEM_FENCE);
 
 	uint32_3 ub[4]; read4l(ub, X12, X3, k8, 2);
-	bkwd421(ub, wri12, wri3, sj8);
+	bkwd4(ub, wri12, wri3, sj8);
 	write4(x12, x3, ub, k_group + k8, 2);
 }
 
-__kernel __attribute__((work_group_size_hint(16 / 4 * VSIZE, 1, 1)))
+__kernel __attribute__((reqd_work_group_size(16 / 4 * VSIZE, 1, 1)))
 void square16(const __global uint32_2 * restrict const wr12, const __global uint32 * restrict const wr3,
 	const __global uint32_2 * restrict const wri12, const __global uint32 * restrict const wri3,
 	__global uint32_2 * restrict const x12, __global uint32 * restrict const x3)
@@ -547,15 +564,18 @@ void square16(const __global uint32_2 * restrict const wr12, const __global uint
 	__local uint32_2 X12[16 * VSIZE];	// VSIZE = 64 => 8 KB
 	__local uint32 X3[16 * VSIZE];
 
+	const sz_t local_id = (sz_t)get_local_id(0), group_id = (sz_t)get_group_id(0);
+
 	// get_global_size(0) is VSIZE * NSIZE / 4
-	const sz_t sj4 = NSIZE / 4 + (sz_t)get_global_id(0) / VSIZE;
-	const sz_t k_group = (sz_t)get_group_id(0) * 16 * VSIZE, i = (sz_t)get_local_id(0);
+	// const sz_t global_id = 16 / 4 * VSIZE * group_id + local_id, sj4 = NSIZE / 4 + global_id / VSIZE;
+	const sz_t sj4 = NSIZE / 4 + 16 / 4 * group_id + local_id / VSIZE;
+	const sz_t k_group = group_id * 16 * VSIZE, i = local_id;
 
 	const sz_t sj16 = sj4 / 4, k16 = i;
 	const sz_t k4 = 4 * (i & (sz_t)~(VSIZE - 1)) + (i % VSIZE);
 
 	uint32_3 uf[4]; read4(uf, x12, x3, k_group + k16, 4);
-	frwd412(uf, wr12, wr3, sj16);
+	frwd4(uf, wr12, wr3, sj16);
 	write4l(X12, X3, uf, k16, 4);
 
 	barrier(CLK_LOCAL_MEM_FENCE);
@@ -569,7 +589,7 @@ void square16(const __global uint32_2 * restrict const wr12, const __global uint
 	barrier(CLK_LOCAL_MEM_FENCE);
 
 	uint32_3 ub[4]; read4l(ub, X12, X3, k16, 4);
-	bkwd421(ub, wri12, wri3, sj16);
+	bkwd4(ub, wri12, wri3, sj16);
 	write4(x12, x3, ub, k_group + k16, 4);
 }
 
@@ -608,12 +628,12 @@ void mul4(const __global uint32_2 * restrict const wr12, const __global uint32 *
 
 	uint32_3 u[4]; read4(u, x12, x3, k, 1);
 	uint32_3 v[4]; read4(v, x12, x3, VSIZE * NSIZE + k, 1);
-	frwd412(u, wr12, wr3, sj);
-	frwd412(v, wr12, wr3, sj);
+	frwd4(u, wr12, wr3, sj);
+	frwd4(v, wr12, wr3, sj);
 
 	for (sz_t h = 0; h < 4; ++h) u[h] = half_3(mul_3(u[h], v[h]));
 
-	bkwd421(u, wri12, wri3, sj);
+	bkwd4(u, wri12, wri3, sj);
 	write4(x12, x3, u, k, 1);
 }
 
@@ -641,7 +661,7 @@ void forward4(const __global uint32_2 * restrict const wr12, const __global uint
 	const sz_t sj = s + (vid >> lm), i = vid & (m - 1), mj = vid - i, k = (reg * NSIZE + (4 * mj + i)) * VSIZE + l;
 
 	uint32_3 u[4]; read4(u, x12, x3, k, m);
-	frwd412(u, wr12, wr3, sj);
+	frwd4(u, wr12, wr3, sj);
 	write4(x12, x3, u, k, m);
 }
 
@@ -655,13 +675,11 @@ void forward8(const __global uint32_2 * restrict const wr12, const __global uint
 	const sz_t sj = s + (vid >> lm), i = vid & (m - 1), mj = vid - i, k = (8 * mj + i) * VSIZE + l;
 
 	uint32_3 u[8]; read8(u, x12, x3, k, m);
-	frwd81(u, read1(wr12, wr3, sj));
-	frwd82(u, read1(wr12, wr3, 2 * sj), read1(wr12, wr3, 2 * sj + 1));
-	frwd83(u, read1(wr12, wr3, 4 * sj), read1(wr12, wr3, 4 * sj + 1), read1(wr12, wr3, 4 * sj + 2), read1(wr12, wr3, 4 * sj + 3));
+	frwd8(u, wr12, wr3, sj);
 	write8(x12, x3, u, k, m);
 }
 
-__kernel __attribute__((work_group_size_hint(16 / 4 * VSIZE, 1, 1)))
+__kernel __attribute__((reqd_work_group_size(16 / 4 * VSIZE, 1, 1)))
 void forward16(const __global uint32_2 * restrict const wr12, const __global uint32 * restrict const wr3,
 	__global uint32_2 * restrict const x12, __global uint32 * restrict const x3,
 	const uint32 s, const uint32 m, const int lm, const uint32 reg)
@@ -669,25 +687,28 @@ void forward16(const __global uint32_2 * restrict const wr12, const __global uin
 	__local uint32_2 X12[16 * VSIZE];	// VSIZE = 64 => 8 KB
 	__local uint32 X3[16 * VSIZE];
 
-	const sz_t gid = (sz_t)get_global_id(0), vid = gid / VSIZE, l = gid % VSIZE;
-	const sz_t lid = (sz_t)get_local_id(0), i = lid / VSIZE, iv = lid & (sz_t)~(VSIZE - 1);
+	const sz_t local_id = (sz_t)get_local_id(0), group_id = (sz_t)get_group_id(0);
 
-	const sz_t vid_blk = (vid & (sz_t)~(4 * m - 1)) * 4, idl = get_group_id(0) & (m - 1);
+	// const sz_t global_id = 16 / 4 * VSIZE * group_id + local_id, vid = global_id / VSIZE, l = global_id % VSIZE;
+	const sz_t vid = 16 / 4 * group_id + local_id / VSIZE, l = local_id % VSIZE;
+	const sz_t i = local_id / VSIZE, iv = local_id & (sz_t)~(VSIZE - 1);
+
+	const sz_t vid_blk = (vid & (sz_t)~(4 * m - 1)) * 4, idl = group_id & (m - 1);
 	const sz_t k0 = (reg * NSIZE + (vid_blk + idl)) * VSIZE + l, miv = iv << lm;
 	const sz_t sj4 = s * 4 + (vid_blk >> (lm + 2)) + i, sj = sj4 / 4;
 
 	uint32_3 u[4]; read4(u, x12, x3, k0 + miv, 4 * m);
-	frwd412(u, wr12, wr3, sj);
+	frwd4(u, wr12, wr3, sj);
 	write4l(X12, X3, u, iv + l, 4);
 
 	barrier(CLK_LOCAL_MEM_FENCE);
 
 	uint32_3 v[4]; read4l(v, X12, X3, 4 * iv + l, 1);
-	frwd412(v, wr12, wr3, sj4); 
+	frwd4(v, wr12, wr3, sj4); 
 	write4(x12, x3, v, k0 + 4 * miv, m);
 }
 
-__kernel __attribute__((work_group_size_hint(16 / 4 * VSIZE, 1, 1)))
+__kernel __attribute__((reqd_work_group_size(16 / 4 * VSIZE, 1, 1)))
 void forward16_0(const __global uint32_2 * restrict const wr12, const __global uint32 * restrict const wr3,
 	__global uint32_2 * restrict const x12, __global uint32 * restrict const x3, const uint32 reg)
 {
@@ -697,10 +718,13 @@ void forward16_0(const __global uint32_2 * restrict const wr12, const __global u
 	const uint32 m = NSIZE / 16;
 	const int lm = LNSIZE - 4;
 
-	const sz_t gid = (sz_t)get_global_id(0), vid = gid / VSIZE, l = gid % VSIZE;
-	const sz_t lid = (sz_t)get_local_id(0), i = lid / VSIZE, iv = lid & (sz_t)~(VSIZE - 1);
+	const sz_t local_id = (sz_t)get_local_id(0), group_id = (sz_t)get_group_id(0);
 
-	const sz_t vid_blk = (vid & (sz_t)~(4 * m - 1)) * 4, idl = get_group_id(0) & (m - 1);
+	// const sz_t global_id = 16 / 4 * VSIZE * group_id + local_id, vid = global_id / VSIZE, l = global_id % VSIZE;
+	const sz_t vid = 16 / 4 * group_id + local_id / VSIZE, l = local_id % VSIZE;
+	const sz_t i = local_id / VSIZE, iv = local_id & (sz_t)~(VSIZE - 1);
+
+	const sz_t vid_blk = (vid & (sz_t)~(4 * m - 1)) * 4, idl = group_id & (m - 1);
 	const sz_t k0 = (reg * NSIZE + (vid_blk + idl)) * VSIZE + l, miv = iv << lm;
 	const sz_t sj4 = 4 + (vid_blk >> (lm + 2)) + i;
 
@@ -712,7 +736,7 @@ void forward16_0(const __global uint32_2 * restrict const wr12, const __global u
 	barrier(CLK_LOCAL_MEM_FENCE);
 
 	uint32_3 v[4]; read4l(v, X12, X3, 4 * iv + l, 1);
-	frwd412(v, wr12, wr3, sj4);
+	frwd4(v, wr12, wr3, sj4);
 	write4(x12, x3, v, k0 + 4 * miv, m);
 }
 
@@ -740,7 +764,7 @@ void backward4(const __global uint32_2 * restrict const wri12, const __global ui
 	const sz_t sj = s + (vid >> lm), i = vid & (m - 1), mj = vid - i, k = VSIZE * (4 * mj + i) + l;
 
 	uint32_3 u[4]; read4(u, x12, x3, k, m);
-	bkwd421(u, wri12, wri3, sj);
+	bkwd4(u, wri12, wri3, sj);
 	write4(x12, x3, u, k, m);
 }
 
@@ -754,13 +778,11 @@ void backward8(const __global uint32_2 * restrict const wri12, const __global ui
 	const sz_t sj = s + (vid >> lm), i = vid & (m - 1), mj = vid - i, k = VSIZE * (8 * mj + i) + l;
 
 	uint32_3 u[8]; read8(u, x12, x3, k, m);
-	bkwd83(u, read1(wri12, wri3, 4 * sj), read1(wri12, wri3, 4 * sj + 1), read1(wri12, wri3, 4 * sj + 2), read1(wri12, wri3, 4 * sj + 3));
-	bkwd82(u, read1(wri12, wri3, 2 * sj), read1(wri12, wri3, 2 * sj + 1));
-	bkwd81(u, read1(wri12, wri3, sj));
+	bkwd8(u, wri12, wri3, sj);
 	write8(x12, x3, u, k, m);
 }
 
-__kernel __attribute__((work_group_size_hint(16 / 4 * VSIZE, 1, 1)))
+__kernel __attribute__((reqd_work_group_size(16 / 4 * VSIZE, 1, 1)))
 void backward16(const __global uint32_2 * restrict const wri12, const __global uint32 * restrict const wri3,
 	__global uint32_2 * restrict const x12, __global uint32 * restrict const x3,
 	const uint32 s, const uint32 m, const int lm)
@@ -768,25 +790,28 @@ void backward16(const __global uint32_2 * restrict const wri12, const __global u
 	__local uint32_2 X12[16 * VSIZE];	// VSIZE = 64 => 8 KB
 	__local uint32 X3[16 * VSIZE];
 
-	const sz_t gid = (sz_t)get_global_id(0), vid = gid / VSIZE, l = gid % VSIZE;
-	const sz_t lid = (sz_t)get_local_id(0), i = lid / VSIZE, iv = lid & (sz_t)~(VSIZE - 1);
+	const sz_t local_id = (sz_t)get_local_id(0), group_id = (sz_t)get_group_id(0);
 
-	const sz_t vid_blk = (vid & (sz_t)~(4 * m - 1)) * 4, idl = get_group_id(0) & (m - 1);
+	// const sz_t global_id = 16 / 4 * VSIZE * group_id + local_id, vid = global_id / VSIZE, l = global_id % VSIZE;
+	const sz_t vid = 16 / 4 * group_id + local_id / VSIZE, l = local_id % VSIZE;
+	const sz_t i = local_id / VSIZE, iv = local_id & (sz_t)~(VSIZE - 1);
+
+	const sz_t vid_blk = (vid & (sz_t)~(4 * m - 1)) * 4, idl = group_id & (m - 1);
 	const sz_t k0 = VSIZE * (vid_blk + idl) + l, miv = iv << lm;
 	const sz_t sj4 = s * 4 + (vid_blk >> (lm + 2)) + i, sj = sj4 / 4;
 
 	uint32_3 v[4]; read4(v, x12, x3, k0 + 4 * miv, m);
-	bkwd421(v, wri12, wri3, sj4);
+	bkwd4(v, wri12, wri3, sj4);
 	write4l(X12, X3, v, 4 * iv + l, 1);
 
 	barrier(CLK_LOCAL_MEM_FENCE);
 
 	uint32_3 u[4]; read4l(u, X12, X3, iv + l, 4);
-	bkwd421(u, wri12, wri3, sj);
+	bkwd4(u, wri12, wri3, sj);
 	write4(x12, x3, u, k0 + miv, 4 * m);
 }
 
-__kernel __attribute__((work_group_size_hint(16 / 4 * VSIZE, 1, 1)))
+__kernel __attribute__((reqd_work_group_size(16 / 4 * VSIZE, 1, 1)))
 void backward16_0(const __global uint32_2 * restrict const wri12, const __global uint32 * restrict const wri3,
 	__global uint32_2 * restrict const x12, __global uint32 * restrict const x3)
 {
@@ -796,15 +821,18 @@ void backward16_0(const __global uint32_2 * restrict const wri12, const __global
 	const uint32 m = NSIZE / 16;
 	const int lm = LNSIZE - 4;
 
-	const sz_t gid = (sz_t)get_global_id(0), vid = gid / VSIZE, l = gid % VSIZE;
-	const sz_t lid = (sz_t)get_local_id(0), i = lid / VSIZE, iv = lid & (sz_t)~(VSIZE - 1);
+	const sz_t local_id = (sz_t)get_local_id(0), group_id = (sz_t)get_group_id(0);
 
-	const sz_t vid_blk = (vid & (sz_t)~(4 * m - 1)) * 4, idl = get_group_id(0) & (m - 1);
+	// const sz_t global_id = 16 / 4 * VSIZE * group_id + local_id, vid = global_id / VSIZE, l = global_id % VSIZE;
+	const sz_t vid = 16 / 4 * group_id + local_id / VSIZE, l = local_id % VSIZE;
+	const sz_t i = local_id / VSIZE, iv = local_id & (sz_t)~(VSIZE - 1);
+
+	const sz_t vid_blk = (vid & (sz_t)~(4 * m - 1)) * 4, idl = group_id & (m - 1);
 	const sz_t k0 = VSIZE * (vid_blk + idl) + l, miv = iv << lm;
 	const sz_t sj4 = 4 + (vid_blk >> (lm + 2)) + i;
 
 	uint32_3 v[4]; read4(v, x12, x3, k0 + 4 * miv, m);
-	bkwd421(v, wri12, wri3, sj4);
+	bkwd4(v, wri12, wri3, sj4);
 	write4l(X12, X3, v, 4 * iv + l, 1);
 
 	barrier(CLK_LOCAL_MEM_FENCE);
