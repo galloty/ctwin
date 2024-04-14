@@ -484,10 +484,10 @@ public:
 		return true;
 	}
 
-public:
+/*public:
 	void bench()
 	{
 		createTransform(4);
 		_transform->bench();
-	}
+	}*/
 };

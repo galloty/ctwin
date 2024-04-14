@@ -30,6 +30,8 @@ static const char * const src_ocl_kernel = \
 "\n" \
 "typedef struct { uint32 r1; uint32 r2; uint32 r3; } uint32_3;\n" \
 "\n" \
+"//////////////////////////////////////////////////////////////////\n" \
+"\n" \
 "typedef struct { uint64 s0; uint32 s1; } uint96;\n" \
 "typedef struct { uint64 s0; int32  s1; } int96;\n" \
 "\n" \
@@ -90,6 +92,8 @@ static const char * const src_ocl_kernel = \
 "	return int96_u(t);\n" \
 "}\n" \
 "\n" \
+"//////////////////////////////////////////////////////////////////\n" \
+"\n" \
 "inline uint32 _addMod(const uint32 lhs, const uint32 rhs, const uint32 p)\n" \
 "{\n" \
 "	const uint32 c = (lhs >= p - rhs) ? p : 0;\n" \
@@ -115,6 +119,8 @@ static const char * const src_ocl_kernel = \
 "	const uint32 mp = mul_hi(t_lo * q, p);\n" \
 "	return _subMod(t_hi, mp, p);\n" \
 "}\n" \
+"\n" \
+"//////////////////////////////////////////////////////////////////\n" \
 "\n" \
 "inline uint32 add_P1(const uint32 lhs, const uint32 rhs) { return _addMod(lhs, rhs, P1); }\n" \
 "inline uint32 add_P2(const uint32 lhs, const uint32 rhs) { return _addMod(lhs, rhs, P2); }\n" \
@@ -142,6 +148,8 @@ static const char * const src_ocl_kernel = \
 "\n" \
 "inline int32 geti_P1(const uint32 n) { return (n > P1 / 2) ? (int32)(n - P1) : (int32)n; }\n" \
 "\n" \
+"//////////////////////////////////////////////////////////////////\n" \
+"\n" \
 "inline uint32_3 add_3(const uint32_3 lhs, const uint32_3 rhs) { const uint32_3 r = { add_P1(lhs.r1, rhs.r1), add_P2(lhs.r2, rhs.r2), add_P3(lhs.r3, rhs.r3) }; return r; }\n" \
 "inline uint32_3 sub_3(const uint32_3 lhs, const uint32_3 rhs) { const uint32_3 r = { sub_P1(lhs.r1, rhs.r1), sub_P2(lhs.r2, rhs.r2), sub_P3(lhs.r3, rhs.r3) }; return r; }\n" \
 "inline uint32_3 half_3(const uint32_3 lhs) { const uint32_3 r = { half_P1(lhs.r1), half_P2(lhs.r2), half_P3(lhs.r3) }; return r; }\n" \
@@ -149,16 +157,7 @@ static const char * const src_ocl_kernel = \
 "inline uint32_3 toMonty_3(const uint32_3 lhs) { const uint32_3 r = { toMonty_P1(lhs.r1), toMonty_P2(lhs.r2), toMonty_P3(lhs.r3) }; return r; }\n" \
 "inline uint32_3 seti_3(const int32 i) { const uint32_3 r = { seti_P1(i), seti_P2(i), seti_P3(i) }; return r; }\n" \
 "\n" \
-"inline static int96 garner3(const uint32_3 lhs)\n" \
-"{\n" \
-"	const uint32 u13 = mul_P1(sub_P1(lhs.r1, lhs.r3), InvP3_P1);\n" \
-"	const uint32 u23 = mul_P2(sub_P2(lhs.r2, lhs.r3), InvP3_P2);\n" \
-"	const uint32 u123 = mul_P1(sub_P1(u13, u23), InvP2_P1);\n" \
-"	const uint96 n = uint96_add_64(uint96_mul_64_32(P2P3, u123), u23 * (uint64)P3 + lhs.r3);\n" \
-"	const uint96 P1P2P3 = uint96_set(P1P2P3l, P1P2P3h), P1P2P3_2 = uint96_set(P1P2P3_2l, P1P2P3_2h);\n" \
-"	const int96 r = uint96_is_greater(n, P1P2P3_2) ? uint96_subi(n, P1P2P3) : uint96_i(n);\n" \
-"	return r;\n" \
-"}\n" \
+"//////////////////////////////////////////////////////////////////\n" \
 "\n" \
 "__constant uint64 mask64[64] = {\n" \
 "	0x0000000000000001ul, 0x0000000000000002ul, 0x0000000000000004ul, 0x0000000000000008ul,\n" \
@@ -178,10 +177,14 @@ static const char * const src_ocl_kernel = \
 "	0x0100000000000000ul, 0x0200000000000000ul, 0x0400000000000000ul, 0x0800000000000000ul,\n" \
 "	0x1000000000000000ul, 0x2000000000000000ul, 0x4000000000000000ul, 0x8000000000000000ul };\n" \
 "\n" \
+"//////////////////////////////////////////////////////////////////\n" \
+"\n" \
 "inline uint32_3 read1(const __global uint32_2 * const x12, const __global uint32 * const x3, const sz_t k)\n" \
 "{\n" \
 "	const uint32_2 t = x12[k]; const uint32_3 r = { t.s0, t.s1, x3[k] }; return r;\n" \
 "}\n" \
+"\n" \
+"//////////////////////////////////////////////////////////////////\n" \
 "\n" \
 "inline void frwd2(uint32_3 * const u, const uint32_3 w)\n" \
 "{\n" \
@@ -204,13 +207,15 @@ static const char * const src_ocl_kernel = \
 "\n" \
 "inline void read2(uint32_3 * const u, const __global uint32_2 * const x12, const __global uint32 * const x3, const sz_t k, const uint32 m)\n" \
 "{\n" \
-"	for (sz_t h = 0; h < 2; ++h) { const uint32_2 t = x12[k + h * VSIZE * m]; const uint32_3 r = { t.s0, t.s1, x3[k + h * VSIZE * m] }; u[h] = r; }\n" \
+"	for (sz_t h = 0; h < 2; ++h) { const sz_t j = k + h * VSIZE * m; const uint32_2 t = x12[j]; const uint32_3 r = { t.s0, t.s1, x3[j] }; u[h] = r; }\n" \
 "}\n" \
 "\n" \
 "inline void write2(__global uint32_2 * const x12, __global uint32 * const x3, const uint32_3 * const u, const sz_t k, const uint32 m)\n" \
 "{\n" \
-"	for (sz_t h = 0; h < 2; ++h) { x12[k + h * VSIZE * m] = (uint32_2)(u[h].r1, u[h].r2); x3[k + h * VSIZE * m] = u[h].r3; }\n" \
+"	for (sz_t h = 0; h < 2; ++h) { const sz_t j = k + h * VSIZE * m; x12[j] = (uint32_2)(u[h].r1, u[h].r2); x3[j] = u[h].r3; }\n" \
 "}\n" \
+"\n" \
+"//////////////////////////////////////////////////////////////////\n" \
 "\n" \
 "inline void frwd41(uint32_3 * const u, const uint32_3 w_1)\n" \
 "{\n" \
@@ -220,28 +225,12 @@ static const char * const src_ocl_kernel = \
 "	u[3] = sub_3(u[1], u3w1); u[1] = add_3(u[1], u3w1);\n" \
 "}\n" \
 "\n" \
-"inline void frwd41_0(uint32_3 * const u, const uint32_3 w_1)\n" \
-"{\n" \
-"	const uint32_3 u2w1 = mul_3(u[2], w_1);\n" \
-"	u[2] = add_3(u[2], sub_3(u[0], u2w1)); u[0] = add_3(u[0], u2w1);\n" \
-"	const uint32_3 u3w1 = mul_3(u[3], w_1);\n" \
-"	u[3] = add_3(u[3], sub_3(u[1], u3w1)); u[1] = add_3(u[1], u3w1);\n" \
-"}\n" \
-"\n" \
 "inline void frwd42(uint32_3 * const u, const uint32_3 w_2, const uint32_3 w_3)\n" \
 "{\n" \
 "	const uint32_3 u1w2 = mul_3(u[1], w_2);\n" \
 "	u[1] = sub_3(u[0], u1w2); u[0] = add_3(u[0], u1w2);\n" \
 "	const uint32_3 u3w3 = mul_3(u[3], w_3);\n" \
 "	u[3] = sub_3(u[2], u3w3); u[2] = add_3(u[2], u3w3);\n" \
-"}\n" \
-"\n" \
-"inline void frwd42_0(uint32_3 * const u, const uint32_3 w_2, const uint32_3 w_3)\n" \
-"{\n" \
-"	const uint32_3 u0 = toMonty_3(u[0]), u1w2 = mul_3(u[1], w_2);\n" \
-"	u[0] = add_3(u0, u1w2); u[1] = sub_3(u0, u1w2);\n" \
-"	const uint32_3 u2 = toMonty_3(u[2]), u3w3 = mul_3(u[3], w_3);\n" \
-"	u[2] = add_3(u2, u3w3); u[3] = sub_3(u2, u3w3);\n" \
 "}\n" \
 "\n" \
 "inline void bkwd42(uint32_3 * const u, const uint32_3 wi_2, const uint32_3 wi_3)\n" \
@@ -258,6 +247,22 @@ static const char * const src_ocl_kernel = \
 "	u[0] = add_3(u[0], u[2]); u[2] = mul_3(v2, wi_1);\n" \
 "	const uint32_3 v3 = sub_3(u[1], u[3]);\n" \
 "	u[1] = add_3(u[1], u[3]); u[3] = mul_3(v3, wi_1);\n" \
+"}\n" \
+"\n" \
+"inline void frwd41_0(uint32_3 * const u, const uint32_3 w_1)\n" \
+"{\n" \
+"	const uint32_3 u2w1 = mul_3(u[2], w_1);\n" \
+"	u[2] = add_3(u[2], sub_3(u[0], u2w1)); u[0] = add_3(u[0], u2w1);\n" \
+"	const uint32_3 u3w1 = mul_3(u[3], w_1);\n" \
+"	u[3] = add_3(u[3], sub_3(u[1], u3w1)); u[1] = add_3(u[1], u3w1);\n" \
+"}\n" \
+"\n" \
+"inline void frwd42_0(uint32_3 * const u, const uint32_3 w_2, const uint32_3 w_3)\n" \
+"{\n" \
+"	const uint32_3 u0 = toMonty_3(u[0]), u1w2 = mul_3(u[1], w_2);\n" \
+"	u[0] = add_3(u0, u1w2); u[1] = sub_3(u0, u1w2);\n" \
+"	const uint32_3 u2 = toMonty_3(u[2]), u3w3 = mul_3(u[3], w_3);\n" \
+"	u[2] = add_3(u2, u3w3); u[3] = sub_3(u2, u3w3);\n" \
 "}\n" \
 "\n" \
 "inline void bkwd41_0(uint32_3 * const u, const uint32_3 wi_0, const uint32_3 wi_1)\n" \
@@ -278,74 +283,182 @@ static const char * const src_ocl_kernel = \
 "\n" \
 "inline void read4(uint32_3 * const u, const __global uint32_2 * const x12, const __global uint32 * const x3, const sz_t k, const uint32 m)\n" \
 "{\n" \
-"	for (sz_t h = 0; h < 4; ++h) { const uint32_2 t = x12[k + h * VSIZE * m]; const uint32_3 r = { t.s0, t.s1, x3[k + h * VSIZE * m] }; u[h] = r; }\n" \
+"	for (sz_t h = 0; h < 4; ++h) { const sz_t j = k + h * VSIZE * m; const uint32_2 t = x12[j]; const uint32_3 r = { t.s0, t.s1, x3[j] }; u[h] = r; }\n" \
 "}\n" \
 "\n" \
 "inline void write4(__global uint32_2 * const x12, __global uint32 * const x3, const uint32_3 * const u, const sz_t k, const uint32 m)\n" \
 "{\n" \
-"	for (sz_t h = 0; h < 4; ++h) { x12[k + h * VSIZE * m] = (uint32_2)(u[h].r1, u[h].r2); x3[k + h * VSIZE * m] = u[h].r3; }\n" \
+"	for (sz_t h = 0; h < 4; ++h) { const sz_t j = k + h * VSIZE * m; x12[j] = (uint32_2)(u[h].r1, u[h].r2); x3[j] = u[h].r3; }\n" \
 "}\n" \
 "\n" \
-"inline void read22l(uint32_3 * const u, const __local uint32_2 * const X12, const __local uint32 * const X3, const sz_t k, const uint32 m)\n" \
+"inline void read4_2(uint32_3 * const u, const __global uint32_2 * const x12, const __global uint32 * const x3, const sz_t k, const uint32 m)\n" \
 "{\n" \
-"	for (sz_t h = 0; h < 2; ++h) { const uint32_2 t = X12[k + 0 + h * VSIZE * m]; const uint32_3 r = { t.s0, t.s1, X3[k + 0 + h * VSIZE * m] }; u[h + 0] = r; }\n" \
-"	for (sz_t h = 0; h < 2; ++h) { const uint32_2 t = X12[k + 1 + h * VSIZE * m]; const uint32_3 r = { t.s0, t.s1, X3[k + 1 + h * VSIZE * m] }; u[h + 2] = r; }\n" \
+"	for (sz_t h = 0; h < 4; ++h) { const sz_t j = k + (h / 2) * VSIZE * m + (h % 2) * (VSIZE / 2); const uint32_2 t = x12[j]; const uint32_3 r = { t.s0, t.s1, x3[j] }; u[h] = r; }\n" \
 "}\n" \
 "\n" \
-"inline void write22l(__local uint32_2 * const X12, __local uint32 * const X3, const uint32_3 * const u, const sz_t k, const uint32 m)\n" \
+"inline void write4_2(__global uint32_2 * const x12, __global uint32 * const x3, const uint32_3 * const u, const sz_t k, const uint32 m)\n" \
 "{\n" \
-"	for (sz_t h = 0; h < 2; ++h) { X12[k + 0 + h * VSIZE * m] = (uint32_2)(u[h + 0].r1, u[h + 0].r2); X3[k + 0 + h * VSIZE * m] = u[h + 0].r3; }\n" \
-"	for (sz_t h = 0; h < 2; ++h) { X12[k + 1 + h * VSIZE * m] = (uint32_2)(u[h + 2].r1, u[h + 2].r2); X3[k + 1 + h * VSIZE * m] = u[h + 2].r3; }\n" \
+"	for (sz_t h = 0; h < 4; ++h) { const sz_t j = k + (h / 2) * VSIZE * m + (h % 2) * (VSIZE / 2); x12[j] = (uint32_2)(u[h].r1, u[h].r2); x3[j] = u[h].r3; }\n" \
+"}\n" \
+"\n" \
+"inline void read22l(uint32_3 * const u, const __local uint32_2 * const X12, const __local uint32 * const X3, const sz_t k)\n" \
+"{\n" \
+"	for (sz_t h = 0; h < 4; ++h) { const sz_t j = k + (h / 2) + (h % 2) * VSIZE; const uint32_2 t = X12[j]; const uint32_3 r = { t.s0, t.s1, X3[j] }; u[h] = r; }\n" \
+"}\n" \
+"\n" \
+"inline void write22l(__local uint32_2 * const X12, __local uint32 * const X3, const uint32_3 * const u, const sz_t k)\n" \
+"{\n" \
+"	for (sz_t h = 0; h < 4; ++h) { const sz_t j = k + (h / 2) + (h % 2) * VSIZE; X12[j] = (uint32_2)(u[h].r1, u[h].r2); X3[j] = u[h].r3; }\n" \
 "}\n" \
 "\n" \
 "inline void read4l(uint32_3 * const u, const __local uint32_2 * const X12, const __local uint32 * const X3, const sz_t k, const uint32 m)\n" \
 "{\n" \
-"	for (sz_t h = 0; h < 4; ++h) { const uint32_2 t = X12[k + h * VSIZE * m]; const uint32_3 r = { t.s0, t.s1, X3[k + h * VSIZE * m] }; u[h] = r; }\n" \
+"	for (sz_t h = 0; h < 4; ++h) { const sz_t j = k + h * VSIZE * m; const uint32_2 t = X12[j]; const uint32_3 r = { t.s0, t.s1, X3[j] }; u[h] = r; }\n" \
 "}\n" \
 "\n" \
 "inline void write4l(__local uint32_2 * const X12, __local uint32 * const X3, const uint32_3 * const u, const sz_t k, const uint32 m)\n" \
 "{\n" \
-"	for (sz_t h = 0; h < 4; ++h) { X12[k + h * VSIZE * m] = (uint32_2)(u[h].r1, u[h].r2); X3[k + h * VSIZE * m] = u[h].r3; }\n" \
+"	for (sz_t h = 0; h < 4; ++h) { const sz_t j = k + h * VSIZE * m; X12[j] = (uint32_2)(u[h].r1, u[h].r2); X3[j] = u[h].r3; }\n" \
 "}\n" \
 "\n" \
-"inline void frwd4(const __global uint32_2 * restrict const wr12, const __global uint32 * restrict const wr3,\n" \
-"	const __global uint32_2 * restrict const x12, const __global uint32 * restrict const x3,\n" \
-"	__local uint32_2 * const X12, __local uint32 * const X3, const sz_t kg, const sz_t k, const sz_t m, const sz_t sj)\n" \
+"inline void read4l_2(uint32_3 * const u, const __local uint32_2 * const X12, const __local uint32 * const X3, const sz_t k)\n" \
 "{\n" \
-"	uint32_3 u[4]; read4(u, x12, x3, kg + k, m);\n" \
+"	for (sz_t h = 0; h < 4; ++h) { const sz_t j = k + h * (VSIZE / 2); const uint32_2 t = X12[j]; const uint32_3 r = { t.s0, t.s1, X3[j] }; u[h] = r; }\n" \
+"}\n" \
+"\n" \
+"inline void write4l_2(__local uint32_2 * const X12, __local uint32 * const X3, const uint32_3 * const u, const sz_t k)\n" \
+"{\n" \
+"	for (sz_t h = 0; h < 4; ++h) { const sz_t j = k + h * (VSIZE / 2); X12[j] = (uint32_2)(u[h].r1, u[h].r2); X3[j] = u[h].r3; }\n" \
+"}\n" \
+"\n" \
+"inline void frwd4(uint32_3 * const u, const __global uint32_2 * restrict const wr12, const __global uint32 * restrict const wr3, const sz_t sj)\n" \
+"{\n" \
 "	frwd41(u, read1(wr12, wr3, sj));\n" \
 "	frwd42(u, read1(wr12, wr3, 2 * sj), read1(wr12, wr3, 2 * sj + 1));\n" \
-"	write4l(X12, X3, u, k, m);\n" \
 "}\n" \
 "\n" \
-"inline void bkwd4(const __global uint32_2 * restrict const wri12, const __global uint32 * restrict const wri3,\n" \
-"	const __local uint32_2 * const X12, const __local uint32 * const X3,\n" \
-"	__global uint32_2 * restrict const x12, __global uint32 * restrict const x3, const sz_t kg, const sz_t k, const sz_t m, const sz_t sj)\n" \
+"inline void bkwd4(uint32_3 * const u, const __global uint32_2 * restrict const wri12, const __global uint32 * restrict const wri3, const sz_t sj)\n" \
 "{\n" \
-"	uint32_3 u[4]; read4l(u, X12, X3, k, m);\n" \
 "	bkwd42(u, read1(wri12, wri3, 2 * sj), read1(wri12, wri3, 2 * sj + 1));\n" \
 "	bkwd41(u, read1(wri12, wri3, sj));\n" \
-"	write4(x12, x3, u, kg + k, m);\n" \
 "}\n" \
 "\n" \
-"inline void sqr4l(const __global uint32_2 * restrict const wr12, const __global uint32 * restrict const wr3,\n" \
-"	const __global uint32_2 * restrict const wri12, const __global uint32 * restrict const wri3,\n" \
-"	__local uint32_2 * const X12, __local uint32 * const X3, const sz_t k, const sz_t sj)\n" \
+"//////////////////////////////////////////////////////////////////\n" \
+"\n" \
+"inline void frwd81(uint32_3 * const u, const uint32_3 w_1)\n" \
 "{\n" \
-"	uint32_3 u[4]; read4l(u, X12, X3, k, 1);\n" \
-"	frwd41(u, read1(wr12, wr3, sj));\n" \
-"	sqr42(u, read1(wr12, wr3, 2 * sj), read1(wr12, wr3, 2 * sj + 1));\n" \
-"	bkwd41(u, read1(wri12, wri3, sj));\n" \
-"	write4l(X12, X3, u, k, 1);\n" \
+"	for (sz_t i = 0; i < 4; ++i)\n" \
+"	{\n" \
+"		const uint32_3 uhw = mul_3(u[i + 4], w_1);\n" \
+"		u[i + 4] = sub_3(u[i + 0], uhw); u[i + 0] = add_3(u[i + 0], uhw);\n" \
+"	}\n" \
 "}\n" \
 "\n" \
-"inline void sqr22l(const __global uint32_2 * restrict const wr12, const __global uint32 * restrict const wr3,\n" \
-"	__local uint32_2 * const X12, __local uint32 * const X3, const sz_t k, const sz_t sj)\n" \
+"inline void frwd82(uint32_3 * const u, const uint32_3 w_2, const uint32_3 w_3)\n" \
 "{\n" \
-"	uint32_3 u[4]; read22l(u, X12, X3, k, 1);\n" \
-"	const uint32_3 w = read1(wr12, wr3, sj);\n" \
-"	sqr2(&u[0], w); sqr2(&u[2], w);\n" \
-"	write22l(X12, X3, u, k, 1);\n" \
+"	for (sz_t i = 0; i < 2; ++i)\n" \
+"	{\n" \
+"		const uint32_3 uhw = mul_3(u[i + 2], w_2);\n" \
+"		u[i + 2] = sub_3(u[i + 0], uhw); u[i + 0] = add_3(u[i + 0], uhw);\n" \
+"	}\n" \
+"	for (sz_t i = 0; i < 2; ++i)\n" \
+"	{\n" \
+"		const uint32_3 uhw = mul_3(u[i + 6], w_3);\n" \
+"		u[i + 6] = sub_3(u[i + 4], uhw); u[i + 4] = add_3(u[i + 4], uhw);\n" \
+"	}\n" \
+"}\n" \
+"\n" \
+"inline void frwd83(uint32_3 * const u, const uint32_3 w_4, const uint32_3 w_5, const uint32_3 w_6, const uint32_3 w_7)\n" \
+"{\n" \
+"	const uint32_3 u1w4 = mul_3(u[1], w_4);\n" \
+"	u[1] = sub_3(u[0], u1w4); u[0] = add_3(u[0], u1w4);\n" \
+"	const uint32_3 u3w5 = mul_3(u[3], w_5);\n" \
+"	u[3] = sub_3(u[2], u3w5); u[2] = add_3(u[2], u3w5);\n" \
+"	const uint32_3 u5w6 = mul_3(u[5], w_6);\n" \
+"	u[5] = sub_3(u[4], u5w6); u[4] = add_3(u[4], u5w6);\n" \
+"	const uint32_3 u7w7 = mul_3(u[7], w_7);\n" \
+"	u[7] = sub_3(u[6], u7w7); u[6] = add_3(u[6], u7w7);\n" \
+"}\n" \
+"\n" \
+"inline void bkwd83(uint32_3 * const u, const uint32_3 wi_4, const uint32_3 wi_5, const uint32_3 wi_6, const uint32_3 wi_7)\n" \
+"{\n" \
+"	const uint32_3 v1 = sub_3(u[0], u[1]);\n" \
+"	u[0] = add_3(u[0], u[1]); u[1] = mul_3(v1, wi_4);\n" \
+"	const uint32_3 v3 = sub_3(u[2], u[3]);\n" \
+"	u[2] = add_3(u[2], u[3]); u[3] = mul_3(v3, wi_5);\n" \
+"	const uint32_3 v5 = sub_3(u[4], u[5]);\n" \
+"	u[4] = add_3(u[4], u[5]); u[5] = mul_3(v5, wi_6);\n" \
+"	const uint32_3 v7 = sub_3(u[6], u[7]);\n" \
+"	u[6] = add_3(u[6], u[7]); u[7] = mul_3(v7, wi_7);\n" \
+"}\n" \
+"\n" \
+"inline void bkwd82(uint32_3 * const u, const uint32_3 wi_2, const uint32_3 wi_3)\n" \
+"{\n" \
+"	const uint32_3 v2 = sub_3(u[0], u[2]);\n" \
+"	u[0] = add_3(u[0], u[2]); u[2] = mul_3(v2, wi_2);\n" \
+"	const uint32_3 v3 = sub_3(u[1], u[3]);\n" \
+"	u[1] = add_3(u[1], u[3]); u[3] = mul_3(v3, wi_2);\n" \
+"\n" \
+"	const uint32_3 v6 = sub_3(u[4], u[6]);\n" \
+"	u[4] = add_3(u[4], u[6]); u[6] = mul_3(v6, wi_3);\n" \
+"	const uint32_3 v7 = sub_3(u[5], u[7]);\n" \
+"	u[5] = add_3(u[5], u[7]); u[7] = mul_3(v7, wi_3);\n" \
+"}\n" \
+"\n" \
+"inline void bkwd81(uint32_3 * const u, const uint32_3 wi_1)\n" \
+"{\n" \
+"	for (sz_t i = 0; i < 4; ++i)\n" \
+"	{\n" \
+"		const uint32_3 vh = sub_3(u[i + 0], u[i + 4]);\n" \
+"		u[i + 0] = add_3(u[i + 0], u[i + 4]); u[i + 4] = mul_3(vh, wi_1);\n" \
+"	}\n" \
+"}\n" \
+"\n" \
+"inline void read8(uint32_3 * const u, const __global uint32_2 * const x12, const __global uint32 * const x3, const sz_t k, const uint32 m)\n" \
+"{\n" \
+"	for (sz_t h = 0; h < 8; ++h) { const uint32_2 t = x12[k + h * VSIZE * m]; const uint32_3 r = { t.s0, t.s1, x3[k + h * VSIZE * m] }; u[h] = r; }\n" \
+"}\n" \
+"\n" \
+"inline void write8(__global uint32_2 * const x12, __global uint32 * const x3, const uint32_3 * const u, const sz_t k, const uint32 m)\n" \
+"{\n" \
+"	for (sz_t h = 0; h < 8; ++h) { x12[k + h * VSIZE * m] = (uint32_2)(u[h].r1, u[h].r2); x3[k + h * VSIZE * m] = u[h].r3; }\n" \
+"}\n" \
+"\n" \
+"inline void read8l(uint32_3 * const u, const __local uint32_2 * const X12, const __local uint32 * const X3, const sz_t k, const uint32 m)\n" \
+"{\n" \
+"	for (sz_t h = 0; h < 8; ++h) { const uint32_2 t = X12[k + h * VSIZE * m]; const uint32_3 r = { t.s0, t.s1, X3[k + h * VSIZE * m] }; u[h] = r; }\n" \
+"}\n" \
+"\n" \
+"inline void write8l(__local uint32_2 * const X12, __local uint32 * const X3, const uint32_3 * const u, const sz_t k, const uint32 m)\n" \
+"{\n" \
+"	for (sz_t h = 0; h < 8; ++h) { X12[k + h * VSIZE * m] = (uint32_2)(u[h].r1, u[h].r2); X3[k + h * VSIZE * m] = u[h].r3; }\n" \
+"}\n" \
+"\n" \
+"inline void frwd8(uint32_3 * const u, const __global uint32_2 * restrict const wr12, const __global uint32 * restrict const wr3, const sz_t sj)\n" \
+"{\n" \
+"	frwd81(u, read1(wr12, wr3, sj));\n" \
+"	frwd82(u, read1(wr12, wr3, 2 * sj), read1(wr12, wr3, 2 * sj + 1));\n" \
+"	frwd83(u, read1(wr12, wr3, 4 * sj), read1(wr12, wr3, 4 * sj + 1), read1(wr12, wr3, 4 * sj + 2), read1(wr12, wr3, 4 * sj + 3));\n" \
+"}\n" \
+"\n" \
+"inline void bkwd8(uint32_3 * const u, const __global uint32_2 * restrict const wri12, const __global uint32 * restrict const wri3, const sz_t sj)\n" \
+"{\n" \
+"	bkwd83(u, read1(wri12, wri3, 4 * sj), read1(wri12, wri3, 4 * sj + 1), read1(wri12, wri3, 4 * sj + 2), read1(wri12, wri3, 4 * sj + 3));\n" \
+"	bkwd82(u, read1(wri12, wri3, 2 * sj), read1(wri12, wri3, 2 * sj + 1));\n" \
+"	bkwd81(u, read1(wri12, wri3, sj));\n" \
+"}\n" \
+"\n" \
+"//////////////////////////////////////////////////////////////////\n" \
+"\n" \
+"inline static int96 garner3(const uint32_3 lhs)\n" \
+"{\n" \
+"	const uint32 u13 = mul_P1(sub_P1(lhs.r1, lhs.r3), InvP3_P1);\n" \
+"	const uint32 u23 = mul_P2(sub_P2(lhs.r2, lhs.r3), InvP3_P2);\n" \
+"	const uint32 u123 = mul_P1(sub_P1(u13, u23), InvP2_P1);\n" \
+"	const uint96 n = uint96_add_64(uint96_mul_64_32(P2P3, u123), u23 * (uint64)P3 + lhs.r3);\n" \
+"	const uint96 P1P2P3 = uint96_set(P1P2P3l, P1P2P3h), P1P2P3_2 = uint96_set(P1P2P3_2l, P1P2P3_2h);\n" \
+"	const int96 r = uint96_is_greater(n, P1P2P3_2) ? uint96_subi(n, P1P2P3) : uint96_i(n);\n" \
+"	return r;\n" \
 "}\n" \
 "\n" \
 "inline uint32 barrett(const uint64 a, const uint32 b, const uint32 b_inv, const int b_s, uint32 * a_p)\n" \
@@ -448,7 +561,7 @@ static const char * const src_ocl_kernel = \
 "	write4(x12, x3, u, k, 1);\n" \
 "}\n" \
 "\n" \
-"__kernel __attribute__((work_group_size_hint(8 / 4 * VSIZE, 1, 1)))\n" \
+"__kernel __attribute__((reqd_work_group_size(8 / 4 * VSIZE, 1, 1)))\n" \
 "void square8(const __global uint32_2 * restrict const wr12, const __global uint32 * restrict const wr3,\n" \
 "	const __global uint32_2 * restrict const wri12, const __global uint32 * restrict const wri3,\n" \
 "	__global uint32_2 * restrict const x12, __global uint32 * restrict const x3)\n" \
@@ -456,21 +569,36 @@ static const char * const src_ocl_kernel = \
 "	__local uint32_2 X12[8 * VSIZE];\n" \
 "	__local uint32 X3[8 * VSIZE];\n" \
 "\n" \
+"	const sz_t i = (sz_t)get_local_id(0), group_id = (sz_t)get_group_id(0);\n" \
+"\n" \
+"	const sz_t k_group = group_id * 8 * VSIZE;\n" \
+"\n" \
 "	// get_global_size(0) is VSIZE * NSIZE / 4\n" \
-"	const sz_t sj2 = NSIZE / 2 + (sz_t)get_global_id(0) * 2 / VSIZE;\n" \
-"	const sz_t k_group = (sz_t)get_group_id(0) * 8 * VSIZE, i = (sz_t)get_local_id(0);\n" \
+"	// const sz_t global_id = 8 / 4 * VSIZE * group_id + i, sj8 = NSIZE / 2 + global_id * 2 / VSIZE;\n" \
+"	const sz_t sj8 = NSIZE / 2 + 8 / 4 * 2 * group_id + i * 2 / VSIZE, sj2 = sj8 / 4;\n" \
+"	const sz_t k2 = 2 * ((2 * i) & (sz_t)~(VSIZE - 1)) + ((2 * i) % VSIZE), k8 = i;\n" \
 "\n" \
-"	const sz_t sj8 = sj2 / 4, k8 = i;\n" \
-"	const sz_t k2 = 2 * ((2 * i) & (sz_t)~(VSIZE - 1)) + ((2 * i) % VSIZE);\n" \
+"	uint32_3 u[4];\n" \
+"	\n" \
+"	read4(u, x12, x3, k_group + k8, 2);\n" \
+"	frwd4(u, wr12, wr3, sj2);\n" \
+"	write4l(X12, X3, u, k8, 2);\n" \
 "\n" \
-"	frwd4(wr12, wr3, x12, x3, X12, X3, k_group, k8, 2, sj8);\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
-"	sqr22l(wr12, wr3, X12, X3, k2, sj2);\n" \
+"\n" \
+"	read22l(u, X12, X3, k2);\n" \
+"	const uint32_3 w = read1(wr12, wr3, sj8);\n" \
+"	sqr2(&u[0], w); sqr2(&u[2], w);\n" \
+"	write22l(X12, X3, u, k2);\n" \
+"\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
-"	bkwd4(wri12, wri3, X12, X3, x12, x3, k_group, k8, 2, sj8);\n" \
+"\n" \
+"	read4l(u, X12, X3, k8, 2);\n" \
+"	bkwd4(u, wri12, wri3, sj2);\n" \
+"	write4(x12, x3, u, k_group + k8, 2);\n" \
 "}\n" \
 "\n" \
-"__kernel __attribute__((work_group_size_hint(16 / 4 * VSIZE, 1, 1)))\n" \
+"__kernel __attribute__((reqd_work_group_size(16 / 4 * VSIZE, 1, 1)))\n" \
 "void square16(const __global uint32_2 * restrict const wr12, const __global uint32 * restrict const wr3,\n" \
 "	const __global uint32_2 * restrict const wri12, const __global uint32 * restrict const wri3,\n" \
 "	__global uint32_2 * restrict const x12, __global uint32 * restrict const x3)\n" \
@@ -478,18 +606,86 @@ static const char * const src_ocl_kernel = \
 "	__local uint32_2 X12[16 * VSIZE];	// VSIZE = 64 => 8 KB\n" \
 "	__local uint32 X3[16 * VSIZE];\n" \
 "\n" \
+"	const sz_t i = (sz_t)get_local_id(0), group_id = (sz_t)get_group_id(0);\n" \
+"	const sz_t il = i % VSIZE, iv = i & (sz_t)~(VSIZE - 1);\n" \
+"\n" \
+"	const sz_t k_group = group_id * 16 * VSIZE;\n" \
+"\n" \
 "	// get_global_size(0) is VSIZE * NSIZE / 4\n" \
-"	const sz_t sj4 = NSIZE / 4 + (sz_t)get_global_id(0) / VSIZE;\n" \
-"	const sz_t k_group = (sz_t)get_group_id(0) * 16 * VSIZE, i = (sz_t)get_local_id(0);\n" \
+"	// const sz_t global_id = 16 / 4 * VSIZE * group_id + i, sj4 = NSIZE / 4 + global_id / VSIZE;\n" \
+"	const sz_t sj4 = NSIZE / 4 + 16 / 4 * group_id + i / VSIZE, sj = sj4 / 4;\n" \
+"	const sz_t k4 = 4 * iv + il, k16 = i;	// iv + il\n" \
 "\n" \
-"	const sz_t sj16 = sj4 / 4, k16 = i;\n" \
-"	const sz_t k4 = 4 * (i & (sz_t)~(VSIZE - 1)) + (i % VSIZE);\n" \
+"	uint32_3 u[4];\n" \
 "\n" \
-"	frwd4(wr12, wr3, x12, x3, X12, X3, k_group, k16, 4, sj16);\n" \
+"	read4(u, x12, x3, k_group + k16, 4);\n" \
+"	frwd4(u, wr12, wr3, sj);\n" \
+"	write4l(X12, X3, u, k16, 4);\n" \
+"\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
-"	sqr4l(wr12, wr3, wri12, wri3, X12, X3, k4, sj4);\n" \
+"\n" \
+"	read4l(u, X12, X3, k4, 1);\n" \
+"	frwd41(u, read1(wr12, wr3, sj4));\n" \
+"	sqr42(u, read1(wr12, wr3, 2 * sj4), read1(wr12, wr3, 2 * sj4 + 1));\n" \
+"	bkwd41(u, read1(wri12, wri3, sj4));\n" \
+"	write4l(X12, X3, u, k4, 1);\n" \
+"\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
-"	bkwd4(wri12, wri3, X12, X3, x12, x3, k_group, k16, 4, sj16);\n" \
+"\n" \
+"	read4l(u, X12, X3, k16, 4);\n" \
+"	bkwd4(u, wri12, wri3, sj);\n" \
+"	write4(x12, x3, u, k_group + k16, 4);\n" \
+"}\n" \
+"\n" \
+"__kernel // __attribute__((reqd_work_group_size(32 / 4 * VSIZE, 1, 1)))\n" \
+"void square32(const __global uint32_2 * restrict const wr12, const __global uint32 * restrict const wr3,\n" \
+"	const __global uint32_2 * restrict const wri12, const __global uint32 * restrict const wri3,\n" \
+"	__global uint32_2 * restrict const x12, __global uint32 * restrict const x3)\n" \
+"{\n" \
+"	__local uint32_2 X12[32 * VSIZE];	// VSIZE = 64 => 16 KB\n" \
+"	__local uint32 X3[32 * VSIZE];\n" \
+"\n" \
+"	const sz_t i = (sz_t)get_local_id(0), group_id = (sz_t)get_group_id(0);\n" \
+"\n" \
+"	const sz_t k_group = group_id * 32 * VSIZE;\n" \
+"\n" \
+"	// get_global_size(0) is VSIZE * NSIZE / 4\n" \
+"	// const sz_t global_id = 32 / 4 * VSIZE * group_id + i, sj32 = NSIZE / 2 + global_id * 2 / VSIZE;\n" \
+"	const sz_t sj32 = NSIZE / 2 + 32 / 4 * 2 * group_id + i * 2 / VSIZE, sj8 = sj32 / 4, sj2 = sj8 / 4;\n" \
+"	const sz_t k2 = 2 * ((2 * i) & (sz_t)~(VSIZE - 1)) + ((2 * i) % VSIZE);\n" \
+"	const sz_t k8 = 4 * (i & (sz_t)~(2 * VSIZE - 1)) + (i % (2 * VSIZE));\n" \
+"	const sz_t k32 = i;\n" \
+"\n" \
+"	uint32_3 u[4];\n" \
+"\n" \
+"	read4(u, x12, x3, k_group + k32, 8);\n" \
+"	frwd4(u, wr12, wr3, sj2);\n" \
+"	write4l(X12, X3, u, k32, 8);\n" \
+"\n" \
+"	barrier(CLK_LOCAL_MEM_FENCE);\n" \
+"\n" \
+"	read4l(u, X12, X3, k8, 2);\n" \
+"	frwd4(u, wr12, wr3, sj8);\n" \
+"	write4l(X12, X3, u, k8, 2);\n" \
+"\n" \
+"	barrier(CLK_LOCAL_MEM_FENCE);\n" \
+"\n" \
+"	read22l(u, X12, X3, k2);\n" \
+"	const uint32_3 w = read1(wr12, wr3, sj32);\n" \
+"	sqr2(&u[0], w); sqr2(&u[2], w);\n" \
+"	write22l(X12, X3, u, k2);\n" \
+"\n" \
+"	barrier(CLK_LOCAL_MEM_FENCE);\n" \
+"\n" \
+"	read4l(u, X12, X3, k8, 2);\n" \
+"	bkwd4(u, wri12, wri3, sj8);\n" \
+"	write4l(X12, X3, u, k8, 2);\n" \
+"\n" \
+"	barrier(CLK_LOCAL_MEM_FENCE);\n" \
+"\n" \
+"	read4l(u, X12, X3, k32, 8);\n" \
+"	bkwd4(u, wri12, wri3, sj2);\n" \
+"	write4(x12, x3, u, k_group + k32, 8);\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
@@ -525,20 +721,29 @@ static const char * const src_ocl_kernel = \
 "	// get_global_size(0) is VSIZE * NSIZE / 4\n" \
 "	const sz_t sj = NSIZE / 4 + vid, k = VSIZE * 4 * vid + l;\n" \
 "\n" \
-"	const uint32_3 wr_1 = read1(wr12, wr3, sj), wr_2 = read1(wr12, wr3, 2 * sj), wr_3 = read1(wr12, wr3, 2 * sj + 1);\n" \
-"\n" \
 "	uint32_3 u[4]; read4(u, x12, x3, k, 1);\n" \
-"	frwd41(u, wr_1);\n" \
-"	frwd42(u, wr_2, wr_3);\n" \
 "	uint32_3 v[4]; read4(v, x12, x3, VSIZE * NSIZE + k, 1);\n" \
-"	frwd41(v, wr_1);\n" \
-"	frwd42(v, wr_2, wr_3);\n" \
+"	frwd4(u, wr12, wr3, sj);\n" \
+"	frwd4(v, wr12, wr3, sj);\n" \
 "\n" \
 "	for (sz_t h = 0; h < 4; ++h) u[h] = half_3(mul_3(u[h], v[h]));\n" \
 "\n" \
-"	bkwd42(u, read1(wri12, wri3, 2 * sj), read1(wri12, wri3, 2 * sj + 1));\n" \
-"	bkwd41(u, read1(wri12, wri3, sj));\n" \
+"	bkwd4(u, wri12, wri3, sj);\n" \
 "	write4(x12, x3, u, k, 1);\n" \
+"}\n" \
+"\n" \
+"__kernel\n" \
+"void forward2(const __global uint32_2 * restrict const wr12, const __global uint32 * restrict const wr3,\n" \
+"	__global uint32_2 * restrict const x12, __global uint32 * restrict const x3,\n" \
+"	const uint32 s, const uint32 m, const int lm)\n" \
+"{\n" \
+"	const sz_t id = (sz_t)get_global_id(0), vid = id / VSIZE, l = id % VSIZE;\n" \
+"\n" \
+"	const sz_t sj = s + (vid >> lm), i = vid & (m - 1), mj = vid - i, k = (2 * mj + i) * VSIZE + l;\n" \
+"\n" \
+"	uint32_3 u[2]; read2(u, x12, x3, k, m);\n" \
+"	frwd2(u, read1(wr12, wr3, sj));\n" \
+"	write2(x12, x3, u, k, m);\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
@@ -551,12 +756,25 @@ static const char * const src_ocl_kernel = \
 "	const sz_t sj = s + (vid >> lm), i = vid & (m - 1), mj = vid - i, k = (reg * NSIZE + (4 * mj + i)) * VSIZE + l;\n" \
 "\n" \
 "	uint32_3 u[4]; read4(u, x12, x3, k, m);\n" \
-"	frwd41(u, read1(wr12, wr3, sj));\n" \
-"	frwd42(u, read1(wr12, wr3, 2 * sj), read1(wr12, wr3, 2 * sj + 1));\n" \
+"	frwd4(u, wr12, wr3, sj);\n" \
 "	write4(x12, x3, u, k, m);\n" \
 "}\n" \
 "\n" \
-"__kernel __attribute__((work_group_size_hint(16 / 4 * VSIZE, 1, 1)))\n" \
+"__kernel\n" \
+"void forward8(const __global uint32_2 * restrict const wr12, const __global uint32 * restrict const wr3,\n" \
+"	__global uint32_2 * restrict const x12, __global uint32 * restrict const x3,\n" \
+"	const uint32 s, const uint32 m, const int lm)\n" \
+"{\n" \
+"	const sz_t id = (sz_t)get_global_id(0), vid = id / VSIZE, l = id % VSIZE;\n" \
+"\n" \
+"	const sz_t sj = s + (vid >> lm), i = vid & (m - 1), mj = vid - i, k = (8 * mj + i) * VSIZE + l;\n" \
+"\n" \
+"	uint32_3 u[8]; read8(u, x12, x3, k, m);\n" \
+"	frwd8(u, wr12, wr3, sj);\n" \
+"	write8(x12, x3, u, k, m);\n" \
+"}\n" \
+"\n" \
+"__kernel __attribute__((reqd_work_group_size(16 / 4 * VSIZE, 1, 1)))\n" \
 "void forward16(const __global uint32_2 * restrict const wr12, const __global uint32 * restrict const wr3,\n" \
 "	__global uint32_2 * restrict const x12, __global uint32 * restrict const x3,\n" \
 "	const uint32 s, const uint32 m, const int lm, const uint32 reg)\n" \
@@ -564,27 +782,30 @@ static const char * const src_ocl_kernel = \
 "	__local uint32_2 X12[16 * VSIZE];	// VSIZE = 64 => 8 KB\n" \
 "	__local uint32 X3[16 * VSIZE];\n" \
 "\n" \
-"	const sz_t gid = (sz_t)get_global_id(0), vid = gid / VSIZE, l = gid % VSIZE;\n" \
-"	const sz_t lid = (sz_t)get_local_id(0), i = lid / VSIZE, iv = lid & (sz_t)~(VSIZE - 1);\n" \
+"	const sz_t i = (sz_t)get_local_id(0), group_id = (sz_t)get_group_id(0);\n" \
+"	const sz_t il = i % VSIZE, iv = i & (sz_t)~(VSIZE - 1);\n" \
 "\n" \
-"	const sz_t vid_blk = (vid & (sz_t)~(4 * m - 1)) * 4, idl = get_group_id(0) & (m - 1);\n" \
-"	const sz_t k0 = (reg * NSIZE + (vid_blk + idl)) * VSIZE + l, miv = iv << lm;\n" \
-"	const sz_t sj4 = s * 4 + (vid_blk >> (lm + 2)) + i, sj = sj4 / 4;\n" \
+"	// const sz_t global_id = 16 / 4 * VSIZE * group_id + i, vid = global_id / VSIZE;\n" \
+"	const sz_t vid = 16 / 4 * group_id + i / VSIZE;\n" \
 "\n" \
-"	uint32_3 u[4]; read4(u, x12, x3, k0 + miv, 4 * m);\n" \
-"	frwd41(u, read1(wr12, wr3, sj));\n" \
-"	frwd42(u, read1(wr12, wr3, 2 * sj), read1(wr12, wr3, 2 * sj + 1));\n" \
-"	write4l(X12, X3, u, iv + l, 4);\n" \
+"	const sz_t vid_blk = vid & (sz_t)~(4 * m - 1), idl = group_id & (m - 1);\n" \
+"	const sz_t k_group = (reg * NSIZE + (4 * vid_blk + idl)) * VSIZE, miv = iv << lm;\n" \
+"	const sz_t sj4 = s * 4 + (vid_blk >> lm) + i / VSIZE, sj = sj4 / 4;\n" \
+"\n" \
+"	uint32_3 u[4]; \n" \
+"\n" \
+"	read4(u, x12, x3, k_group + miv + il, 4 * m);\n" \
+"	frwd4(u, wr12, wr3, sj);\n" \
+"	write4l(X12, X3, u, i, 4);\n" \
 "\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
 "\n" \
-"	uint32_3 v[4]; read4l(v, X12, X3, 4 * iv + l, 1);\n" \
-"	frwd41(v, read1(wr12, wr3, sj4)); \n" \
-"	frwd42(v, read1(wr12, wr3, 2 * sj4), read1(wr12, wr3, 2 * sj4 + 1));\n" \
-"	write4(x12, x3, v, k0 + 4 * miv, m);\n" \
+"	read4l(u, X12, X3, 4 * iv + il, 1);\n" \
+"	frwd4(u, wr12, wr3, sj4);\n" \
+"	write4(x12, x3, u, k_group + 4 * miv + il, m);\n" \
 "}\n" \
 "\n" \
-"__kernel __attribute__((work_group_size_hint(16 / 4 * VSIZE, 1, 1)))\n" \
+"__kernel __attribute__((reqd_work_group_size(16 / 4 * VSIZE, 1, 1)))\n" \
 "void forward16_0(const __global uint32_2 * restrict const wr12, const __global uint32 * restrict const wr3,\n" \
 "	__global uint32_2 * restrict const x12, __global uint32 * restrict const x3, const uint32 reg)\n" \
 "{\n" \
@@ -594,10 +815,13 @@ static const char * const src_ocl_kernel = \
 "	const uint32 m = NSIZE / 16;\n" \
 "	const int lm = LNSIZE - 4;\n" \
 "\n" \
-"	const sz_t gid = (sz_t)get_global_id(0), vid = gid / VSIZE, l = gid % VSIZE;\n" \
-"	const sz_t lid = (sz_t)get_local_id(0), i = lid / VSIZE, iv = lid & (sz_t)~(VSIZE - 1);\n" \
+"	const sz_t local_id = (sz_t)get_local_id(0), group_id = (sz_t)get_group_id(0);\n" \
 "\n" \
-"	const sz_t vid_blk = (vid & (sz_t)~(4 * m - 1)) * 4, idl = get_group_id(0) & (m - 1);\n" \
+"	// const sz_t global_id = 16 / 4 * VSIZE * group_id + local_id, vid = global_id / VSIZE, l = global_id % VSIZE;\n" \
+"	const sz_t vid = 16 / 4 * group_id + local_id / VSIZE, l = local_id % VSIZE;\n" \
+"	const sz_t i = local_id / VSIZE, iv = local_id & (sz_t)~(VSIZE - 1);\n" \
+"\n" \
+"	const sz_t vid_blk = (vid & (sz_t)~(4 * m - 1)) * 4, idl = group_id & (m - 1);\n" \
 "	const sz_t k0 = (reg * NSIZE + (vid_blk + idl)) * VSIZE + l, miv = iv << lm;\n" \
 "	const sz_t sj4 = 4 + (vid_blk >> (lm + 2)) + i;\n" \
 "\n" \
@@ -609,9 +833,64 @@ static const char * const src_ocl_kernel = \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
 "\n" \
 "	uint32_3 v[4]; read4l(v, X12, X3, 4 * iv + l, 1);\n" \
-"	frwd41(v, read1(wr12, wr3, sj4));\n" \
-"	frwd42(v, read1(wr12, wr3, 2 * sj4), read1(wr12, wr3, 2 * sj4 + 1));\n" \
+"	frwd4(v, wr12, wr3, sj4);\n" \
 "	write4(x12, x3, v, k0 + 4 * miv, m);\n" \
+"}\n" \
+"\n" \
+"__kernel // __attribute__((reqd_work_group_size(32 / 4 * VSIZE, 1, 1)))\n" \
+"void forward32(const __global uint32_2 * restrict const wr12, const __global uint32 * restrict const wr3,\n" \
+"	__global uint32_2 * restrict const x12, __global uint32 * restrict const x3,\n" \
+"	const uint32 s, const uint32 m, const int lm)\n" \
+"{\n" \
+"	__local uint32_2 X12[32 * VSIZE];	// VSIZE = 64 => 16 KB\n" \
+"	__local uint32 X3[32 * VSIZE];\n" \
+"\n" \
+"	const sz_t i = (sz_t)get_local_id(0), group_id = (sz_t)get_group_id(0);\n" \
+"	const sz_t il = i % VSIZE, iv = i & (sz_t)~(VSIZE - 1);\n" \
+"	const sz_t il_2 = i % (VSIZE / 2), iv_2 = i & (sz_t)~(VSIZE / 2 - 1);\n" \
+"\n" \
+"	// const sz_t global_id = 32 / 4 * VSIZE * group_id + i, vid = global_id / VSIZE;\n" \
+"	const sz_t vid = 32 / 4 * group_id + i / VSIZE;	// 0 <= vid < 32 / 4\n" \
+"\n" \
+"	const sz_t vid_blk = vid & (sz_t)~(8 * m - 1), idl = group_id & (m - 1);\n" \
+"	const sz_t k_group = (4 * vid_blk + idl) * VSIZE, miv = iv << lm, miv_2 = iv_2 << lm;\n" \
+"\n" \
+"	const sz_t sj32 = s * 16 + (vid_blk >> (lm - 1)) + i / (VSIZE / 2), sj8 = sj32 / 4, sj2 = sj8 / 4;\n" \
+"	const sz_t k2 = 4 * iv_2 + il_2;\n" \
+"	const sz_t k8 = 4 * (i & (sz_t)~(2 * VSIZE - 1)) + (i % (2 * VSIZE));\n" \
+"	const sz_t k32 = i;\n" \
+"\n" \
+"	uint32_3 u[4]; \n" \
+"\n" \
+"	read4(u, x12, x3, k_group + miv + il, 8 * m);\n" \
+"	frwd4(u, wr12, wr3, sj2);\n" \
+"	write4l(X12, X3, u, k32, 8);\n" \
+"\n" \
+"	barrier(CLK_LOCAL_MEM_FENCE);\n" \
+"\n" \
+"	read4l(u, X12, X3, k8, 2);\n" \
+"	frwd4(u, wr12, wr3, sj8);\n" \
+"	write4l(X12, X3, u, k8, 2);\n" \
+"\n" \
+"	barrier(CLK_LOCAL_MEM_FENCE);\n" \
+"\n" \
+"	read4l_2(u, X12, X3, k2);\n" \
+"	frwd41(u, read1(wr12, wr3, sj32));\n" \
+"	write4_2(x12, x3, u, k_group + 4 * miv_2 + il_2, m);\n" \
+"}\n" \
+"\n" \
+"__kernel\n" \
+"void backward2(const __global uint32_2 * restrict const wri12, const __global uint32 * restrict const wri3,\n" \
+"	__global uint32_2 * restrict const x12, __global uint32 * restrict const x3,\n" \
+"	const uint32 s, const uint32 m, const int lm)\n" \
+"{\n" \
+"	const sz_t id = (sz_t)get_global_id(0), vid = id / VSIZE, l = id % VSIZE;\n" \
+"\n" \
+"	const sz_t sj = s + (vid >> lm), i = vid & (m - 1), mj = vid - i, k = VSIZE * (2 * mj + i) + l;\n" \
+"\n" \
+"	uint32_3 u[2]; read2(u, x12, x3, k, m);\n" \
+"	bkwd2(u, read1(wri12, wri3, sj));\n" \
+"	write2(x12, x3, u, k, m);\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
@@ -624,12 +903,25 @@ static const char * const src_ocl_kernel = \
 "	const sz_t sj = s + (vid >> lm), i = vid & (m - 1), mj = vid - i, k = VSIZE * (4 * mj + i) + l;\n" \
 "\n" \
 "	uint32_3 u[4]; read4(u, x12, x3, k, m);\n" \
-"	bkwd42(u, read1(wri12, wri3, 2 * sj), read1(wri12, wri3, 2 * sj + 1));\n" \
-"	bkwd41(u, read1(wri12, wri3, sj));\n" \
+"	bkwd4(u, wri12, wri3, sj);\n" \
 "	write4(x12, x3, u, k, m);\n" \
 "}\n" \
 "\n" \
-"__kernel __attribute__((work_group_size_hint(16 / 4 * VSIZE, 1, 1)))\n" \
+"__kernel\n" \
+"void backward8(const __global uint32_2 * restrict const wri12, const __global uint32 * restrict const wri3,\n" \
+"	__global uint32_2 * restrict const x12, __global uint32 * restrict const x3,\n" \
+"	const uint32 s, const uint32 m, const int lm)\n" \
+"{\n" \
+"	const sz_t id = (sz_t)get_global_id(0), vid = id / VSIZE, l = id % VSIZE;\n" \
+"\n" \
+"	const sz_t sj = s + (vid >> lm), i = vid & (m - 1), mj = vid - i, k = VSIZE * (8 * mj + i) + l;\n" \
+"\n" \
+"	uint32_3 u[8]; read8(u, x12, x3, k, m);\n" \
+"	bkwd8(u, wri12, wri3, sj);\n" \
+"	write8(x12, x3, u, k, m);\n" \
+"}\n" \
+"\n" \
+"__kernel __attribute__((reqd_work_group_size(16 / 4 * VSIZE, 1, 1)))\n" \
 "void backward16(const __global uint32_2 * restrict const wri12, const __global uint32 * restrict const wri3,\n" \
 "	__global uint32_2 * restrict const x12, __global uint32 * restrict const x3,\n" \
 "	const uint32 s, const uint32 m, const int lm)\n" \
@@ -637,27 +929,28 @@ static const char * const src_ocl_kernel = \
 "	__local uint32_2 X12[16 * VSIZE];	// VSIZE = 64 => 8 KB\n" \
 "	__local uint32 X3[16 * VSIZE];\n" \
 "\n" \
-"	const sz_t gid = (sz_t)get_global_id(0), vid = gid / VSIZE, l = gid % VSIZE;\n" \
-"	const sz_t lid = (sz_t)get_local_id(0), i = lid / VSIZE, iv = lid & (sz_t)~(VSIZE - 1);\n" \
+"	const sz_t local_id = (sz_t)get_local_id(0), group_id = (sz_t)get_group_id(0);\n" \
 "\n" \
-"	const sz_t vid_blk = (vid & (sz_t)~(4 * m - 1)) * 4, idl = get_group_id(0) & (m - 1);\n" \
+"	// const sz_t global_id = 16 / 4 * VSIZE * group_id + local_id, vid = global_id / VSIZE, l = global_id % VSIZE;\n" \
+"	const sz_t vid = 16 / 4 * group_id + local_id / VSIZE, l = local_id % VSIZE;\n" \
+"	const sz_t i = local_id / VSIZE, iv = local_id & (sz_t)~(VSIZE - 1);\n" \
+"\n" \
+"	const sz_t vid_blk = (vid & (sz_t)~(4 * m - 1)) * 4, idl = group_id & (m - 1);\n" \
 "	const sz_t k0 = VSIZE * (vid_blk + idl) + l, miv = iv << lm;\n" \
 "	const sz_t sj4 = s * 4 + (vid_blk >> (lm + 2)) + i, sj = sj4 / 4;\n" \
 "\n" \
 "	uint32_3 v[4]; read4(v, x12, x3, k0 + 4 * miv, m);\n" \
-"	bkwd42(v, read1(wri12, wri3, 2 * sj4), read1(wri12, wri3, 2 * sj4 + 1));\n" \
-"	bkwd41(v, read1(wri12, wri3, sj4));\n" \
+"	bkwd4(v, wri12, wri3, sj4);\n" \
 "	write4l(X12, X3, v, 4 * iv + l, 1);\n" \
 "\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
 "\n" \
 "	uint32_3 u[4]; read4l(u, X12, X3, iv + l, 4);\n" \
-"	bkwd42(u, read1(wri12, wri3, 2 * sj), read1(wri12, wri3, 2 * sj + 1));\n" \
-"	bkwd41(u, read1(wri12, wri3, sj));\n" \
+"	bkwd4(u, wri12, wri3, sj);\n" \
 "	write4(x12, x3, u, k0 + miv, 4 * m);\n" \
 "}\n" \
 "\n" \
-"__kernel __attribute__((work_group_size_hint(16 / 4 * VSIZE, 1, 1)))\n" \
+"__kernel __attribute__((reqd_work_group_size(16 / 4 * VSIZE, 1, 1)))\n" \
 "void backward16_0(const __global uint32_2 * restrict const wri12, const __global uint32 * restrict const wri3,\n" \
 "	__global uint32_2 * restrict const x12, __global uint32 * restrict const x3)\n" \
 "{\n" \
@@ -667,16 +960,18 @@ static const char * const src_ocl_kernel = \
 "	const uint32 m = NSIZE / 16;\n" \
 "	const int lm = LNSIZE - 4;\n" \
 "\n" \
-"	const sz_t gid = (sz_t)get_global_id(0), vid = gid / VSIZE, l = gid % VSIZE;\n" \
-"	const sz_t lid = (sz_t)get_local_id(0), i = lid / VSIZE, iv = lid & (sz_t)~(VSIZE - 1);\n" \
+"	const sz_t local_id = (sz_t)get_local_id(0), group_id = (sz_t)get_group_id(0);\n" \
 "\n" \
-"	const sz_t vid_blk = (vid & (sz_t)~(4 * m - 1)) * 4, idl = get_group_id(0) & (m - 1);\n" \
+"	// const sz_t global_id = 16 / 4 * VSIZE * group_id + local_id, vid = global_id / VSIZE, l = global_id % VSIZE;\n" \
+"	const sz_t vid = 16 / 4 * group_id + local_id / VSIZE, l = local_id % VSIZE;\n" \
+"	const sz_t i = local_id / VSIZE, iv = local_id & (sz_t)~(VSIZE - 1);\n" \
+"\n" \
+"	const sz_t vid_blk = (vid & (sz_t)~(4 * m - 1)) * 4, idl = group_id & (m - 1);\n" \
 "	const sz_t k0 = VSIZE * (vid_blk + idl) + l, miv = iv << lm;\n" \
 "	const sz_t sj4 = 4 + (vid_blk >> (lm + 2)) + i;\n" \
 "\n" \
 "	uint32_3 v[4]; read4(v, x12, x3, k0 + 4 * miv, m);\n" \
-"	bkwd42(v, read1(wri12, wri3, 2 * sj4), read1(wri12, wri3, 2 * sj4 + 1));\n" \
-"	bkwd41(v, read1(wri12, wri3, sj4));\n" \
+"	bkwd4(v, wri12, wri3, sj4);\n" \
 "	write4l(X12, X3, v, 4 * iv + l, 1);\n" \
 "\n" \
 "	barrier(CLK_LOCAL_MEM_FENCE);\n" \
@@ -685,6 +980,48 @@ static const char * const src_ocl_kernel = \
 "	bkwd42(u, read1(wri12, wri3, 2), read1(wri12, wri3, 3));\n" \
 "	bkwd41_0(u, read1(wri12, wri3, 0), read1(wri12, wri3, 1));\n" \
 "	write4(x12, x3, u, k0 + miv, 4 * m);\n" \
+"}\n" \
+"\n" \
+"__kernel // __attribute__((reqd_work_group_size(32 / 4 * VSIZE, 1, 1)))\n" \
+"void backward32(const __global uint32_2 * restrict const wri12, const __global uint32 * restrict const wri3,\n" \
+"	__global uint32_2 * restrict const x12, __global uint32 * restrict const x3,\n" \
+"	const uint32 s, const uint32 m, const int lm)\n" \
+"{\n" \
+"	__local uint32_2 X12[32 * VSIZE];	// VSIZE = 64 => 16 KB\n" \
+"	__local uint32 X3[32 * VSIZE];\n" \
+"\n" \
+"	const sz_t i = (sz_t)get_local_id(0), group_id = (sz_t)get_group_id(0);\n" \
+"	const sz_t il = i % VSIZE, iv = i & (sz_t)~(VSIZE - 1);\n" \
+"	const sz_t il_2 = i % (VSIZE / 2), iv_2 = i & (sz_t)~(VSIZE / 2 - 1);\n" \
+"\n" \
+"	// const sz_t global_id = 32 / 4 * VSIZE * group_id + i, vid = global_id / VSIZE;\n" \
+"	const sz_t vid = 32 / 4 * group_id + i / VSIZE;	// 0 <= vid < 32 / 4\n" \
+"\n" \
+"	const sz_t vid_blk = vid & (sz_t)~(8 * m - 1), idl = group_id & (m - 1);\n" \
+"	const sz_t k_group = (4 * vid_blk + idl) * VSIZE, miv = iv << lm, miv_2 = iv_2 << lm;\n" \
+"\n" \
+"	const sz_t sj32 = s * 16 + (vid_blk >> (lm - 1)) + i / (VSIZE / 2), sj8 = sj32 / 4, sj2 = sj8 / 4;\n" \
+"	const sz_t k2 = 4 * iv_2 + il_2;\n" \
+"	const sz_t k8 = 4 * (i & (sz_t)~(2 * VSIZE - 1)) + (i % (2 * VSIZE));\n" \
+"	const sz_t k32 = i;\n" \
+"\n" \
+"	uint32_3 u[4]; \n" \
+"\n" \
+"	read4_2(u, x12, x3, k_group + 4 * miv_2 + il_2, m);\n" \
+"	bkwd41(u, read1(wri12, wri3, sj32));\n" \
+"	write4l_2(X12, X3, u, k2);\n" \
+"\n" \
+"	barrier(CLK_LOCAL_MEM_FENCE);\n" \
+"\n" \
+"	read4l(u, X12, X3, k8, 2);\n" \
+"	bkwd4(u, wri12, wri3, sj8);\n" \
+"	write4l(X12, X3, u, k8, 2);\n" \
+"\n" \
+"	barrier(CLK_LOCAL_MEM_FENCE);\n" \
+"\n" \
+"	read4l(u, X12, X3, k32, 8);\n" \
+"	bkwd4(u, wri12, wri3, sj2);\n" \
+"	write4(x12, x3, u, k_group + miv + il, 8 * m);\n" \
 "}\n" \
 "\n" \
 "__kernel\n" \
@@ -741,6 +1078,8 @@ static const char * const src_ocl_kernel = \
 "	x12[k] = (uint32_2)(u.r1, u.r2); x3[k] = u.r3;\n" \
 "}\n" \
 "\n" \
+"//////////////////////////////////////////////////////////////////\n" \
+"/*\n" \
 "__kernel\n" \
 "void add_throughput(__global uint32 * restrict const data, __global uint32 * restrict const res)\n" \
 "{\n" \
@@ -964,4 +1303,5 @@ static const char * const src_ocl_kernel = \
 "	res[0] = 0;\n" \
 "#endif\n" \
 "}\n" \
+"*/\n" \
 "";

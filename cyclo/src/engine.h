@@ -28,13 +28,13 @@ private:
 	cl_mem _wr12 = nullptr, _wr3 = nullptr, _wri12 = nullptr, _wri3 = nullptr, _bb_inv = nullptr, _bs = nullptr, _f = nullptr;
 	cl_mem _data = nullptr, _res = nullptr;
 	cl_kernel _set = nullptr, _copy = nullptr;
-	cl_kernel _square2 = nullptr, _square4 = nullptr, _square8 = nullptr, _square16 = nullptr;
+	cl_kernel _square2 = nullptr, _square4 = nullptr, _square8 = nullptr, _square16 = nullptr, _square32 = nullptr;
 	cl_kernel _mul2 = nullptr, _mul4 = nullptr;
-	cl_kernel _forward4 = nullptr, _forward16 = nullptr, _forward16_0 = nullptr;
-	cl_kernel _backward4 = nullptr, _backward16 = nullptr, _backward16_0 = nullptr;
+	cl_kernel _forward2 = nullptr, _forward4 = nullptr, _forward8 = nullptr, _forward16 = nullptr, _forward16_0 = nullptr, _forward32 = nullptr;
+	cl_kernel _backward2 = nullptr, _backward4 = nullptr, _backward8 = nullptr, _backward16 = nullptr, _backward16_0 = nullptr, _backward32 = nullptr;;
 	cl_kernel _normalize1 = nullptr, _normalize2 = nullptr;
-	cl_kernel _add_throughput = nullptr, _add_latency = nullptr, _sub_throughput = nullptr, _sub_latency = nullptr;
-	cl_kernel _mul_throughput = nullptr, _mul_latency = nullptr, _but_throughput = nullptr, _but_latency = nullptr;
+	// cl_kernel _add_throughput = nullptr, _add_latency = nullptr, _sub_throughput = nullptr, _sub_latency = nullptr;
+	// cl_kernel _mul_throughput = nullptr, _mul_latency = nullptr, _but_throughput = nullptr, _but_latency = nullptr;
 
 public:
 	engine(const ocl::platform & platform, const size_t d, const bool verbose) : ocl::device(platform, d, verbose) {}
@@ -142,29 +142,36 @@ public:
 		createKernel_square_mul(_square4, "square4");
 		createKernel_square_mul(_square8, "square8");
 		createKernel_square_mul(_square16, "square16");
+		if (getMaxWorkGroupSize() >= VSIZE * 32 / 4) createKernel_square_mul(_square32, "square32");
 
 		createKernel_square_mul(_mul2, "mul2");
 		createKernel_square_mul(_mul4, "mul4");
 
+		createKernel_forward(_forward2, "forward2");
 		createKernel_forward(_forward4, "forward4");
+		createKernel_forward(_forward8, "forward8");
 		createKernel_forward(_forward16, "forward16");
 		createKernel_forward(_forward16_0, "forward16_0");
+		if (getMaxWorkGroupSize() >= VSIZE * 32 / 4) createKernel_forward(_forward32, "forward32");
 
+		createKernel_backward(_backward2, "backward2");
 		createKernel_backward(_backward4, "backward4");
+		createKernel_backward(_backward8, "backward8");
 		createKernel_backward(_backward16, "backward16");
 		createKernel_backward(_backward16_0, "backward16_0");
+		if (getMaxWorkGroupSize() >= VSIZE * 32 / 4) createKernel_backward(_backward32, "backward32");
 
 		createKernel_normalize(_normalize1, "normalize1");
 		createKernel_normalize(_normalize2, "normalize2");
 
-		createKernel_bench(_add_throughput, "add_throughput");
-		createKernel_bench(_add_latency, "add_latency");
-		createKernel_bench(_sub_throughput, "sub_throughput");
-		createKernel_bench(_sub_latency, "sub_latency");
-		createKernel_bench(_mul_throughput, "mul_throughput");
-		createKernel_bench(_mul_latency, "mul_latency");
-		createKernel_bench(_but_throughput, "but_throughput");
-		createKernel_bench(_but_latency, "but_latency");
+		// createKernel_bench(_add_throughput, "add_throughput");
+		// createKernel_bench(_add_latency, "add_latency");
+		// createKernel_bench(_sub_throughput, "sub_throughput");
+		// createKernel_bench(_sub_latency, "sub_latency");
+		// createKernel_bench(_mul_throughput, "mul_throughput");
+		// createKernel_bench(_mul_latency, "mul_latency");
+		// createKernel_bench(_but_throughput, "but_throughput");
+		// createKernel_bench(_but_latency, "but_latency");
 	}
 
 public:
@@ -175,13 +182,13 @@ public:
 		pio::display(ss.str());
 #endif
 		_releaseKernel(_set); _releaseKernel(_copy);
-		_releaseKernel(_square2); _releaseKernel(_square4); _releaseKernel(_square8); _releaseKernel(_square16);
+		_releaseKernel(_square2); _releaseKernel(_square4); _releaseKernel(_square8); _releaseKernel(_square16);  _releaseKernel(_square32);
 		_releaseKernel(_mul2); _releaseKernel(_mul4);
-		_releaseKernel(_forward4); _releaseKernel(_forward16); _releaseKernel(_forward16_0);
-		_releaseKernel(_backward4); _releaseKernel(_backward16); _releaseKernel(_backward16_0);
+		_releaseKernel(_forward2); _releaseKernel(_forward4); _releaseKernel(_forward8); _releaseKernel(_forward16); _releaseKernel(_forward16_0); _releaseKernel(_forward32);
+		_releaseKernel(_backward2); _releaseKernel(_backward4); _releaseKernel(_backward8); _releaseKernel(_backward16); _releaseKernel(_backward16_0); _releaseKernel(_backward32);
 		_releaseKernel(_normalize1); _releaseKernel(_normalize2);
-		_releaseKernel(_add_throughput); _releaseKernel(_add_latency); _releaseKernel(_sub_throughput); _releaseKernel(_sub_latency);
-		_releaseKernel(_mul_throughput); _releaseKernel(_mul_latency); _releaseKernel(_but_throughput); _releaseKernel(_but_latency);
+		// _releaseKernel(_add_throughput); _releaseKernel(_add_latency); _releaseKernel(_sub_throughput); _releaseKernel(_sub_latency);
+		// _releaseKernel(_mul_throughput); _releaseKernel(_mul_latency); _releaseKernel(_but_throughput); _releaseKernel(_but_latency);
 	}
 
 public:
@@ -244,6 +251,7 @@ private:
 	void square4() { _executeKernel(_square4, this->_vnsize / 4); }
 	void square8() { _executeKernel(_square8, this->_vnsize / 4, VSIZE * 8 / 4); }
 	void square16() { _executeKernel(_square16, this->_vnsize / 4, VSIZE * 16 / 4); }
+	void square32() { _executeKernel(_square32, this->_vnsize / 4, VSIZE * 32 / 4); }
 
 	void mul2() { _executeKernel(_mul2, this->_vnsize / 2); }
 	void mul4() { _executeKernel(_mul4, this->_vnsize / 4); }
@@ -256,13 +264,25 @@ private:
 		_setKernelArg(kernel, 6, sizeof(int32), &lm);
 	}
 
-	// void forward4(const uint32 s, const int32 lm)
-	// {
-	// 	set_sm_args(_forward4, s, lm);
-	// 	const uint32 reg0 = 0;
-	// 	_setKernelArg(_forward4, 7, sizeof(uint32), &reg0);
-	// 	_executeKernel(_forward4, this->_vnsize / 4);
-	// }
+	void forward2(const uint32 s, const int32 lm)
+	{
+		set_sm_args(_forward2, s, lm);
+		_executeKernel(_forward2, this->_vnsize / 2);
+	}
+
+	void forward4(const uint32 s, const int32 lm)
+	{
+		set_sm_args(_forward4, s, lm);
+		const uint32 reg0 = 0;
+		_setKernelArg(_forward4, 7, sizeof(uint32), &reg0);
+		_executeKernel(_forward4, this->_vnsize / 4);
+	}
+
+	void forward8(const uint32 s, const int32 lm)
+	{
+		set_sm_args(_forward8, s, lm);
+		_executeKernel(_forward8, this->_vnsize / 8);
+	}
 
 	void forward16(const uint32 s, const int32 lm)
 	{
@@ -279,10 +299,28 @@ private:
 		_executeKernel(_forward16_0, this->_vnsize / 4, VSIZE * 16 / 4);
 	}
 
+	void forward32(const uint32 s, const int32 lm)
+	{
+		set_sm_args(_forward32, s, lm);
+		_executeKernel(_forward32, this->_vnsize / 4, VSIZE * 32 / 4);
+	}
+
+	void backward2(const uint32 s, const int32 lm)
+	{
+		set_sm_args(_backward2, s, lm);
+		_executeKernel(_backward2, this->_vnsize / 2);
+	}
+
 	void backward4(const uint32 s, const int32 lm)
 	{
 		set_sm_args(_backward4, s, lm);
 		_executeKernel(_backward4, this->_vnsize / 4);
+	}
+
+	void backward8(const uint32 s, const int32 lm)
+	{
+		set_sm_args(_backward8, s, lm);
+		_executeKernel(_backward8, this->_vnsize / 8);
 	}
 
 	void backward16(const uint32 s, const int32 lm)
@@ -294,6 +332,12 @@ private:
 	void backward16_0()
 	{
 		_executeKernel(_backward16_0, this->_vnsize / 4, VSIZE * 16 / 4);
+	}
+
+	void backward32(const uint32 s, const int32 lm)
+	{
+		set_sm_args(_backward32, s, lm);
+		_executeKernel(_backward32, this->_vnsize / 4, VSIZE * 32 / 4);
 	}
 
 	void forward4mul(const uint32 s, const int32 lm)
@@ -342,17 +386,35 @@ private:
 public:
 	void squareDup(const int32 ln, const uint64 & dup)
 	{
-		forward16_0(); /*std::cout << "forward16_0 ";*/
+		static bool first = true;
+		const bool verbose = first ? true : false;
+		if (first) first = false;
+		forward16_0(); if (verbose) std::cout << "forward16_0 1 " << ln << ", ";
 		uint32 s = 16; int32 lm = ln - 4;
-		for (; lm > 4; s *= 16, lm -= 4) { forward16(s, lm - 4); /*std::cout << "forward16 ";*/ }
-		if      (lm == 1) { square2(); /*std::cout << "square2 ";*/ }
-		else if (lm == 2) { square4(); /*std::cout << "square4 ";*/ }
-		else if (lm == 3) { square8(); /*std::cout << "square8 ";*/ }
-		else if (lm == 4) { square16(); /*std::cout << "square16 ";*/ }
-		for (s /= 16, lm += 4; s > 1; s /= 16, lm += 4) { backward16(s, lm - 4); /*std::cout << "backward16 ";*/ }
-		backward16_0(); /*std::cout << "backward16_0 ";*/
-		normalize1(dup); /*std::cout << "normalize1 ";*/
-		normalize2(); /*std::cout << "normalize2" << std::endl;*/
+
+		if (getMaxWorkGroupSize() >= VSIZE * 32 / 4)
+		{
+			for (; lm > 5; s *= 32, lm -= 5) { forward32(s, lm - 5); if (verbose) std::cout << "forward32 " << s << " " << lm << ", "; }
+			if      (lm == 1) { square2(); if (verbose) std::cout << "square2 " << s << " " << lm << ", "; }
+			else if (lm == 2) { square4(); if (verbose) std::cout << "square4 " << s << " " << lm << ", "; }
+			else if (lm == 3) { square8(); if (verbose) std::cout << "square8 " << s << " " << lm << ", "; }
+			else if (lm == 4) { square16(); if (verbose) std::cout << "square16 " << s << " " << lm << ", "; }
+			else if (lm == 5) { square32(); if (verbose) std::cout << "square32 " << s << " " << lm << ", "; }
+			for (s /= 32, lm += 5; s >= 16; s /= 32, lm += 5) { backward32(s, lm - 5); if (verbose) std::cout << "backward32 " << s << " " << lm << ", "; }
+		}
+		else
+		{
+			for (; lm > 4; s *= 16, lm -= 4) { forward16(s, lm - 4); if (verbose) std::cout << "forward16 "; }
+			if      (lm == 1) { square2(); if (verbose) std::cout << "square2 " << s << " " << lm << ", "; }
+			else if (lm == 2) { square4(); if (verbose) std::cout << "square4 " << s << " " << lm << ", "; }
+			else if (lm == 3) { square8(); if (verbose) std::cout << "square8 " << s << " " << lm << ", "; }
+			else if (lm == 4) { square16(); if (verbose) std::cout << "square16 " << s << " " << lm << ", "; }
+			for (s /= 16, lm += 4; s > 1; s /= 16, lm += 4) { backward16(s, lm - 4); if (verbose) std::cout << "backward16 " << s << " " << lm << ", "; }
+		}
+
+		backward16_0(); if (verbose) std::cout << "backward16_0 1 " << ln << ", ";
+		normalize1(dup); if (verbose) std::cout << "normalize1 ";
+		normalize2(); if (verbose) std::cout << "normalize2" << std::endl;
 	}
 
 	void mul(const int32 ln)
@@ -369,7 +431,7 @@ public:
 		normalize2();
 	}
 
-	void bench_add_throughput(uint32 * const res)
+/*	void bench_add_throughput(uint32 * const res)
 	{
 		_executeKernel(_add_throughput, 1);
  		readMemory_res(res);
@@ -408,5 +470,5 @@ public:
 	{
 		_executeKernel(_but_latency, 1);
  		readMemory_res(res);
-	}
+	} */
 };

@@ -654,7 +654,7 @@ public:
 		return success;
 	}
 
-public:
+/*public:
 	void bench() const
 	{
 		uint32 res[8];
@@ -684,5 +684,5 @@ public:
 			ss << " radix-2 butterfly: " << bt << " (" << bl << ")." << std::endl << std::endl;
 			pio::print(ss.str());
 		}
-	}
+	}*/
 };
