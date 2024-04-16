@@ -30,8 +30,8 @@ private:
 	cl_kernel _set = nullptr, _copy = nullptr;
 	cl_kernel _square2 = nullptr, _square4 = nullptr, _square8 = nullptr, _square16 = nullptr, _square32 = nullptr;
 	cl_kernel _mul2 = nullptr, _mul4 = nullptr;
-	cl_kernel _forward2 = nullptr, _forward4 = nullptr, _forward8 = nullptr, _forward16 = nullptr, _forward16_0 = nullptr, _forward32 = nullptr;
-	cl_kernel _backward2 = nullptr, _backward4 = nullptr, _backward8 = nullptr, _backward16 = nullptr, _backward16_0 = nullptr, _backward32 = nullptr;;
+	cl_kernel /*_forward2 = nullptr, _forward8 = nullptr,*/ _forward4 = nullptr, _forward16 = nullptr, _forward16_0 = nullptr, _forward32 = nullptr;
+	cl_kernel /*_backward2 = nullptr, _backward8 = nullptr,*/ _backward4 = nullptr, _backward16 = nullptr, _backward16_0 = nullptr, _backward32 = nullptr;;
 	cl_kernel _normalize1 = nullptr, _normalize2 = nullptr;
 	// cl_kernel _add_throughput = nullptr, _add_latency = nullptr, _sub_throughput = nullptr, _sub_latency = nullptr;
 	// cl_kernel _mul_throughput = nullptr, _mul_latency = nullptr, _but_throughput = nullptr, _but_latency = nullptr;
@@ -147,16 +147,16 @@ public:
 		createKernel_square_mul(_mul2, "mul2");
 		createKernel_square_mul(_mul4, "mul4");
 
-		createKernel_forward(_forward2, "forward2");
+		// createKernel_forward(_forward2, "forward2");
 		createKernel_forward(_forward4, "forward4");
-		createKernel_forward(_forward8, "forward8");
+		// createKernel_forward(_forward8, "forward8");
 		createKernel_forward(_forward16, "forward16");
 		createKernel_forward(_forward16_0, "forward16_0");
 		if (getMaxWorkGroupSize() >= VSIZE * 32 / 4) createKernel_forward(_forward32, "forward32");
 
-		createKernel_backward(_backward2, "backward2");
+		// createKernel_backward(_backward2, "backward2");
 		createKernel_backward(_backward4, "backward4");
-		createKernel_backward(_backward8, "backward8");
+		// createKernel_backward(_backward8, "backward8");
 		createKernel_backward(_backward16, "backward16");
 		createKernel_backward(_backward16_0, "backward16_0");
 		if (getMaxWorkGroupSize() >= VSIZE * 32 / 4) createKernel_backward(_backward32, "backward32");
@@ -184,8 +184,8 @@ public:
 		_releaseKernel(_set); _releaseKernel(_copy);
 		_releaseKernel(_square2); _releaseKernel(_square4); _releaseKernel(_square8); _releaseKernel(_square16);  _releaseKernel(_square32);
 		_releaseKernel(_mul2); _releaseKernel(_mul4);
-		_releaseKernel(_forward2); _releaseKernel(_forward4); _releaseKernel(_forward8); _releaseKernel(_forward16); _releaseKernel(_forward16_0); _releaseKernel(_forward32);
-		_releaseKernel(_backward2); _releaseKernel(_backward4); _releaseKernel(_backward8); _releaseKernel(_backward16); _releaseKernel(_backward16_0); _releaseKernel(_backward32);
+		/*_releaseKernel(_forward2); _releaseKernel(_forward8);*/ _releaseKernel(_forward4); _releaseKernel(_forward16); _releaseKernel(_forward16_0); _releaseKernel(_forward32);
+		/*_releaseKernel(_backward2); _releaseKernel(_backward8);*/ _releaseKernel(_backward4); _releaseKernel(_backward16); _releaseKernel(_backward16_0); _releaseKernel(_backward32);
 		_releaseKernel(_normalize1); _releaseKernel(_normalize2);
 		// _releaseKernel(_add_throughput); _releaseKernel(_add_latency); _releaseKernel(_sub_throughput); _releaseKernel(_sub_latency);
 		// _releaseKernel(_mul_throughput); _releaseKernel(_mul_latency); _releaseKernel(_but_throughput); _releaseKernel(_but_latency);
@@ -264,11 +264,11 @@ private:
 		_setKernelArg(kernel, 6, sizeof(int32), &lm);
 	}
 
-	void forward2(const uint32 s, const int32 lm)
+/*	void forward2(const uint32 s, const int32 lm)
 	{
 		set_sm_args(_forward2, s, lm);
 		_executeKernel(_forward2, this->_vnsize / 2);
-	}
+	}*/
 
 	void forward4(const uint32 s, const int32 lm)
 	{
@@ -278,11 +278,11 @@ private:
 		_executeKernel(_forward4, this->_vnsize / 4);
 	}
 
-	void forward8(const uint32 s, const int32 lm)
+/*	void forward8(const uint32 s, const int32 lm)
 	{
 		set_sm_args(_forward8, s, lm);
 		_executeKernel(_forward8, this->_vnsize / 8);
-	}
+	}*/
 
 	void forward16(const uint32 s, const int32 lm)
 	{
@@ -305,11 +305,11 @@ private:
 		_executeKernel(_forward32, this->_vnsize / 4, VSIZE * 32 / 4);
 	}
 
-	void backward2(const uint32 s, const int32 lm)
+/*	void backward2(const uint32 s, const int32 lm)
 	{
 		set_sm_args(_backward2, s, lm);
 		_executeKernel(_backward2, this->_vnsize / 2);
-	}
+	}*/
 
 	void backward4(const uint32 s, const int32 lm)
 	{
@@ -317,11 +317,11 @@ private:
 		_executeKernel(_backward4, this->_vnsize / 4);
 	}
 
-	void backward8(const uint32 s, const int32 lm)
+/*	void backward8(const uint32 s, const int32 lm)
 	{
 		set_sm_args(_backward8, s, lm);
 		_executeKernel(_backward8, this->_vnsize / 8);
-	}
+	}*/
 
 	void backward16(const uint32 s, const int32 lm)
 	{
@@ -386,9 +386,10 @@ private:
 public:
 	void squareDup(const int32 ln, const uint64 & dup)
 	{
-		static bool first = true;
-		const bool verbose = first ? true : false;
-		if (first) first = false;
+		const bool verbose = false;
+		// static bool first = true;
+		// const bool verbose = first ? true : false;
+		// if (first) first = false;
 		forward16_0(); if (verbose) std::cout << "forward16_0 1 " << ln << ", ";
 		uint32 s = 16; int32 lm = ln - 4;
 

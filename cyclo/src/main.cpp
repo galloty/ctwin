@@ -101,7 +101,7 @@ private:
 #endif
 
 		std::ostringstream ss;
-		ss << "cyclo 24.04.00 (" << sysver << ssc.str() << ")" << std::endl;
+		ss << "cyclo 24.4.1 (" << sysver << ssc.str() << ")" << std::endl;
 		ss << "Copyright (c) 2023, Yves Gallot" << std::endl;
 		ss << "ctwin is free source code, under the MIT license." << std::endl;
 		if (nl)
@@ -224,11 +224,11 @@ public:
 
 		if ((n == 0) || filename.empty())
 		{
-			cyclo & app = cyclo::getInstance();
+			/*cyclo & app = cyclo::getInstance();
 			engine eng(platform, d, true);
 			app.init(8, eng, false);
 			app.bench();
-			app.release();
+			app.release();*/
 			return;
 		}
 
